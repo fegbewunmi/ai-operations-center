@@ -12,10 +12,9 @@ class Settings(BaseSettings):
     database_url: str
     cloud_sql_connection_name: str = ""
 
-    # Gemini (Google Agent Platform / Vertex AI unified SDK)
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.5-flash"
-    embedding_model: str = "gemini-embedding-001"
+    # Vertex AI
+    gemini_model: str = "gemini-2.0-flash-001"
+    embedding_model: str = "text-embedding-004"
     embedding_dimensions: int = 768
 
     # Investigation budget defaults

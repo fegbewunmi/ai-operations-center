@@ -7,7 +7,7 @@ it formats what incident_analysis_node already produced.
 """
 from datetime import datetime, timezone
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
@@ -80,9 +80,10 @@ async def synthesizer_node(state: InvestigationState) -> dict:
         }
 
     incident = state["incident"]
-    llm = ChatGoogleGenerativeAI(
-        model=settings.gemini_model,
-        google_api_key=settings.gemini_api_key,
+    llm = ChatVertexAI(
+        model_name=settings.gemini_model,
+        project=settings.gcp_project_id,
+        location=settings.gcp_region,
         temperature=0.3,
     )
 

@@ -72,7 +72,7 @@ def _make_state(analysis_output: AnalysisOutput | None = None) -> dict:
     }
 
 
-@patch("app.graph.nodes.synthesizer.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.synthesizer.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_produces_synthesis_from_analysis_output(mock_llm_class):
     mock_llm = MagicMock()
@@ -89,7 +89,7 @@ async def test_produces_synthesis_from_analysis_output(mock_llm_class):
     assert result["phase"] == "synthesizing"
 
 
-@patch("app.graph.nodes.synthesizer.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.synthesizer.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_passes_through_hypotheses_unchanged(mock_llm_class):
     """Synthesizer must not alter hypotheses — they came from analysis."""
@@ -106,7 +106,7 @@ async def test_passes_through_hypotheses_unchanged(mock_llm_class):
     assert result["synthesis"].top_hypothesis == analysis.top_hypothesis
 
 
-@patch("app.graph.nodes.synthesizer.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.synthesizer.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_passes_through_requires_escalation(mock_llm_class):
     mock_llm = MagicMock()
@@ -122,7 +122,7 @@ async def test_passes_through_requires_escalation(mock_llm_class):
     assert result["synthesis"].escalation_reason == "Low confidence"
 
 
-@patch("app.graph.nodes.synthesizer.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.synthesizer.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_falls_back_to_mechanical_summary_on_llm_error(mock_llm_class):
     """On LLM failure, synthesizer falls back rather than escalating."""
@@ -147,7 +147,7 @@ async def test_escalates_when_analysis_output_is_none():
     assert result["error_log"][0].agent == "synthesizer"
 
 
-@patch("app.graph.nodes.synthesizer.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.synthesizer.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_appends_timeline_event(mock_llm_class):
     mock_llm = MagicMock()

@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-import httpx
+from langchain_google_vertexai import VertexAIEmbeddings
 from sqlalchemy import text
 
 from app.config import settings
@@ -24,22 +24,12 @@ _CATEGORY_TO_INCIDENT_TYPE = {
 
 async def _embed_text(text_to_embed: str) -> list[float] | None:
     try:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.embedding_model}:embedContent"
+        embedder = VertexAIEmbeddings(
+            model_name=settings.embedding_model,
+            project=settings.gcp_project_id,
+            location=settings.gcp_region,
         )
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                url,
-                params={"key": settings.gemini_api_key},
-                json={
-                    "model": f"models/{settings.embedding_model}",
-                    "content": {"parts": [{"text": text_to_embed}]},
-                    "outputDimensionality": settings.embedding_dimensions,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()["embedding"]["values"]
+        return await embedder.aembed_query(text_to_embed)
     except Exception as exc:
         logger.warning("Embedding call failed, incident_memory stored without vector: %s", exc)
         return None

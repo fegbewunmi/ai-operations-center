@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from sqlalchemy import text
 
 from app.config import settings
@@ -317,9 +317,10 @@ async def planner_node(state: InvestigationState) -> dict:
             }
 
     # Call Gemini with structured output
-    llm = ChatGoogleGenerativeAI(
-        model=settings.gemini_model,
-        google_api_key=settings.gemini_api_key,
+    llm = ChatVertexAI(
+        model_name=settings.gemini_model,
+        project=settings.gcp_project_id,
+        location=settings.gcp_region,
         temperature=0.1,
     )
     structured_llm = llm.with_structured_output(PlannerDecision)

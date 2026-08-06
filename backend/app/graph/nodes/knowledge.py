@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import text
 
@@ -18,22 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 async def _embed_query(query_text: str) -> list[float] | None:
-    """Generate an embedding for the query via the Gemini REST API."""
+    """Generate an embedding via Vertex AI text-embedding model."""
     try:
-        import httpx
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.embedding_model}:embedContent"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                url,
-                params={"key": settings.gemini_api_key},
-                json={
-                    "model": f"models/{settings.embedding_model}",
-                    "content": {"parts": [{"text": query_text}]},
-                    "outputDimensionality": settings.embedding_dimensions,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()["embedding"]["values"]
+        embedder = VertexAIEmbeddings(
+            model_name=settings.embedding_model,
+            project=settings.gcp_project_id,
+            location=settings.gcp_region,
+        )
+        return await embedder.aembed_query(query_text)
     except Exception:
         return None
 
@@ -154,9 +146,10 @@ async def _generate_knowledge_summary(
     llm: Any = None,
 ) -> str:
     if llm is None:
-        llm = ChatGoogleGenerativeAI(
-            model=settings.gemini_model,
-            google_api_key=settings.gemini_api_key,
+        llm = ChatVertexAI(
+            model_name=settings.gemini_model,
+            project=settings.gcp_project_id,
+            location=settings.gcp_region,
             temperature=0.1,
         )
 

@@ -70,7 +70,7 @@ async def test_escalates_immediately_when_budget_exhausted():
     """Planner must not call the LLM when iteration budget is already zero."""
     state = _make_state(iterations_used=5, max_iterations=5)
 
-    with patch("app.graph.nodes.planner.ChatGoogleGenerativeAI") as mock_cls:
+    with patch("app.graph.nodes.planner.ChatVertexAI") as mock_cls:
         result = await planner_node(state)
         mock_cls.assert_not_called()
 
@@ -82,7 +82,7 @@ async def test_escalates_immediately_when_budget_exhausted():
 async def test_escalates_when_tool_calls_exhausted():
     state = _make_state(tool_calls_used=20, max_tool_calls=20)
 
-    with patch("app.graph.nodes.planner.ChatGoogleGenerativeAI"):
+    with patch("app.graph.nodes.planner.ChatVertexAI"):
         result = await planner_node(state)
 
     assert result["phase"] == "escalated"
@@ -91,7 +91,7 @@ async def test_escalates_when_tool_calls_exhausted():
 # ── LLM-driven routing ─────────────────────────────────────────────────────────
 
 @patch("app.graph.nodes.planner._fetch_topology", new_callable=AsyncMock)
-@patch("app.graph.nodes.planner.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.planner.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_invoke_decision_sets_investigating_phase(mock_llm_class, mock_topology):
     mock_topology.return_value = None
@@ -124,7 +124,7 @@ async def test_invoke_decision_sets_investigating_phase(mock_llm_class, mock_top
 
 
 @patch("app.graph.nodes.planner._fetch_topology", new_callable=AsyncMock)
-@patch("app.graph.nodes.planner.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.planner.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_synthesize_decision_sets_synthesizing_phase(mock_llm_class, mock_topology):
     mock_topology.return_value = None
@@ -148,7 +148,7 @@ async def test_synthesize_decision_sets_synthesizing_phase(mock_llm_class, mock_
 
 
 @patch("app.graph.nodes.planner._fetch_topology", new_callable=AsyncMock)
-@patch("app.graph.nodes.planner.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.planner.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_escalate_decision_sets_escalated_phase(mock_llm_class, mock_topology):
     mock_topology.return_value = None
@@ -173,7 +173,7 @@ async def test_escalate_decision_sets_escalated_phase(mock_llm_class, mock_topol
 # ── Error handling ─────────────────────────────────────────────────────────────
 
 @patch("app.graph.nodes.planner._fetch_topology", new_callable=AsyncMock)
-@patch("app.graph.nodes.planner.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.planner.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_escalates_on_llm_failure(mock_llm_class, mock_topology):
     mock_topology.return_value = None
@@ -193,7 +193,7 @@ async def test_escalates_on_llm_failure(mock_llm_class, mock_topology):
 # ── Budget increments ──────────────────────────────────────────────────────────
 
 @patch("app.graph.nodes.planner._fetch_topology", new_callable=AsyncMock)
-@patch("app.graph.nodes.planner.ChatGoogleGenerativeAI")
+@patch("app.graph.nodes.planner.ChatVertexAI")
 @pytest.mark.asyncio
 async def test_increments_budget_on_successful_decision(mock_llm_class, mock_topology):
     mock_topology.return_value = None
