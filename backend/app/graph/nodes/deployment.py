@@ -183,8 +183,12 @@ async def deployment_node(state: InvestigationState) -> dict:
             investigation_query=query.investigation_query,
             incident_description=incident.description,
         )
-    except Exception as exc:
-        summary = f"Summary generation failed: {exc}"
+    except Exception:
+        if records:
+            near_str = f" One deployment was {nearest_minutes:.0f} min before onset." if nearest_minutes is not None else ""
+            summary = f"Found {len(records)} deployment(s).{near_str} LLM summary unavailable."
+        else:
+            summary = "No deployments found in the search window."
 
     findings = DeploymentFindings(
         service=query.service_name,

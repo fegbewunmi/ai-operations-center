@@ -29,8 +29,11 @@ Rules:
 - Check deployment history if you see sudden changes or if timing is suspicious.
 - Use knowledge search to find runbooks or similar past incidents.
 - Never repeat a query you have already made - each call must explore new evidence.
+- If telemetry returns no data or says "not instrumented", do NOT retry telemetry - move to deployment or knowledge instead.
+- If an agent returns empty results, accept that and move on to the next evidence source.
 - Set working_confidence based on how well your hypothesis explains all symptoms observed.
 - Move to synthesize when confidence >= {threshold} or you have covered all evidence angles.
+- You MUST synthesize if you have checked telemetry, deployment, AND knowledge - do not keep invoking agents after all three have been queried.
 - Always populate the reason field - it is the primary artifact for debugging and evaluation.
 """.strip()
 

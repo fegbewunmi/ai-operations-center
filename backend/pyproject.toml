@@ -31,6 +31,7 @@ dependencies = [
     "psycopg[binary]>=3.1.0",
 
     # Config and validation
+    "httpx>=0.28.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
 

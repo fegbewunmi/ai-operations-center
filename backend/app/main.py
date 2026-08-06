@@ -11,6 +11,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from app.api.v1.investigations import router as investigations_router
 from app.config import settings
 from app.db.session import engine
+from app.graph.graph import build_graph
 
 
 def _setup_telemetry() -> None:
@@ -25,20 +26,15 @@ def _setup_telemetry() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: inject PostgresSaver into the graph
-    # Deferred import to avoid importing langgraph-checkpoint-postgres at module level
-    # when running tests with MemorySaver
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-    from app.graph import graph as graph_module
 
-    # AsyncPostgresSaver uses psycopg directly and expects a plain postgresql:// URL.
-    # settings.database_url uses postgresql+asyncpg:// for SQLAlchemy - strip the driver prefix.
+    # AsyncPostgresSaver uses psycopg directly - strip the SQLAlchemy driver prefix.
     psycopg_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
     async with AsyncPostgresSaver.from_conn_string(psycopg_url) as checkpointer:
-        await checkpointer.setup()  # creates langgraph checkpoint tables if not present
-        graph_module.investigation_graph = graph_module.build_graph(checkpointer=checkpointer)
+        await checkpointer.setup()
+        # Store on app.state so every request handler can access the live graph.
+        app.state.investigation_graph = build_graph(checkpointer=checkpointer)
         yield
-    # Shutdown: nothing to clean up (checkpointer context manager handles connection pool)
 
 
 def create_app() -> FastAPI:

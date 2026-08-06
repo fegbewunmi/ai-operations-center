@@ -1,12 +1,11 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.graph import graph as graph_module
 from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
 from app.shared.schemas.response import PendingApproval
 from app.config import settings
@@ -52,12 +51,14 @@ class ApprovalRequest(BaseModel):
 @router.post("", response_model=StartInvestigationResponse, status_code=status.HTTP_202_ACCEPTED)
 async def start_investigation(
     body: StartInvestigationRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> StartInvestigationResponse:
     """
     Trigger a new investigation for an incoming incident alert.
     Returns immediately with an investigation_id; the graph runs asynchronously.
     """
+    graph = request.app.state.investigation_graph
     investigation_id = str(uuid.uuid4())
     thread_config = {"configurable": {"thread_id": investigation_id}}
 
@@ -90,7 +91,7 @@ async def start_investigation(
     }
 
     # TODO: run in background task / Cloud Tasks to avoid blocking the HTTP response
-    await graph_module.investigation_graph.ainvoke(initial_state, config=thread_config)
+    await graph.ainvoke(initial_state, config=thread_config)
 
     return StartInvestigationResponse(
         investigation_id=investigation_id,
@@ -102,11 +103,13 @@ async def start_investigation(
 @router.get("/{investigation_id}/status", response_model=InvestigationStatusResponse)
 async def get_investigation_status(
     investigation_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> InvestigationStatusResponse:
     """Return the current phase and budget usage for an investigation."""
+    graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -129,11 +132,13 @@ async def get_investigation_status(
 @router.get("/{investigation_id}/findings")
 async def get_findings(
     investigation_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Return synthesis output for a completed investigation."""
+    graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -153,11 +158,13 @@ async def get_findings(
 @router.get("/{investigation_id}/timeline")
 async def get_timeline(
     investigation_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Return the chronological event timeline for an investigation."""
+    graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -173,6 +180,7 @@ async def get_timeline(
 async def submit_approval(
     investigation_id: str,
     body: ApprovalRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
@@ -180,8 +188,9 @@ async def submit_approval(
     On approval, resumes the graph from its saved checkpoint.
     On rejection, marks the investigation as escalated with a reason.
     """
+    graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -195,19 +204,17 @@ async def submit_approval(
         )
 
     if not body.approved:
-        # Update state to record the rejection; investigation remains escalated
-        await graph_module.investigation_graph.aupdate_state(
+        await graph.aupdate_state(
             config=thread_config,
             values={"escalation_reason": f"Rejected by {body.approved_by}: {body.notes}"},
         )
         return {"status": "rejected", "investigation_id": investigation_id}
 
     # Approval granted - resume from checkpoint
-    # The response node will pick up pending_approvals and dispatch
-    await graph_module.investigation_graph.aupdate_state(
+    await graph.aupdate_state(
         config=thread_config,
         values={"phase": "responding"},
     )
-    await graph_module.investigation_graph.ainvoke(None, config=thread_config)
+    await graph.ainvoke(None, config=thread_config)
 
     return {"status": "approved", "investigation_id": investigation_id}
