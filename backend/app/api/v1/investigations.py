@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.graph.graph import investigation_graph
+from app.graph import graph as graph_module
 from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
 from app.shared.schemas.response import PendingApproval
 from app.config import settings
@@ -90,7 +90,7 @@ async def start_investigation(
     }
 
     # TODO: run in background task / Cloud Tasks to avoid blocking the HTTP response
-    await investigation_graph.ainvoke(initial_state, config=thread_config)
+    await graph_module.investigation_graph.ainvoke(initial_state, config=thread_config)
 
     return StartInvestigationResponse(
         investigation_id=investigation_id,
@@ -106,7 +106,7 @@ async def get_investigation_status(
 ) -> InvestigationStatusResponse:
     """Return the current phase and budget usage for an investigation."""
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -133,7 +133,7 @@ async def get_findings(
 ) -> dict:
     """Return synthesis output for a completed investigation."""
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -157,7 +157,7 @@ async def get_timeline(
 ) -> dict:
     """Return the chronological event timeline for an investigation."""
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -181,7 +181,7 @@ async def submit_approval(
     On rejection, marks the investigation as escalated with a reason.
     """
     thread_config = {"configurable": {"thread_id": investigation_id}}
-    snapshot = await investigation_graph.aget_state(config=thread_config)
+    snapshot = await graph_module.investigation_graph.aget_state(config=thread_config)
 
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
@@ -196,7 +196,7 @@ async def submit_approval(
 
     if not body.approved:
         # Update state to record the rejection; investigation remains escalated
-        await investigation_graph.aupdate_state(
+        await graph_module.investigation_graph.aupdate_state(
             config=thread_config,
             values={"escalation_reason": f"Rejected by {body.approved_by}: {body.notes}"},
         )
@@ -204,10 +204,10 @@ async def submit_approval(
 
     # Approval granted - resume from checkpoint
     # The response node will pick up pending_approvals and dispatch
-    await investigation_graph.aupdate_state(
+    await graph_module.investigation_graph.aupdate_state(
         config=thread_config,
         values={"phase": "responding"},
     )
-    await investigation_graph.ainvoke(None, config=thread_config)
+    await graph_module.investigation_graph.ainvoke(None, config=thread_config)
 
     return {"status": "approved", "investigation_id": investigation_id}
