@@ -28,7 +28,13 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    engine = create_async_engine(get_url(), echo=False)
+    # ssl=False: Cloud SQL Auth Proxy encrypts the tunnel itself;
+    # asyncpg must not attempt a second SSL handshake on top of it.
+    engine = create_async_engine(
+        get_url(),
+        echo=False,
+        connect_args={"ssl": False},
+    )
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await engine.dispose()
