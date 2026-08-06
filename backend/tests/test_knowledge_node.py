@@ -72,7 +72,7 @@ def _mock_db_rows(rows: list[dict]):
     return mock_session_maker
 
 
-@patch("app.graph.nodes.knowledge.ChatVertexAI")
+@patch("app.graph.nodes.knowledge.ChatGoogleGenerativeAI")
 @patch("app.graph.nodes.knowledge._embed_query", new_callable=AsyncMock)
 @patch("app.graph.nodes.knowledge.AsyncSessionLocal")
 @pytest.mark.asyncio
@@ -141,7 +141,7 @@ async def test_appends_knowledge_context_with_results(mock_db, mock_embed, mock_
     assert len(result["timeline"]) == 1
 
 
-@patch("app.graph.nodes.knowledge.ChatVertexAI")
+@patch("app.graph.nodes.knowledge.ChatGoogleGenerativeAI")
 @patch("app.graph.nodes.knowledge._embed_query", new_callable=AsyncMock)
 @patch("app.graph.nodes.knowledge.AsyncSessionLocal")
 @pytest.mark.asyncio

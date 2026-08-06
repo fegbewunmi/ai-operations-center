@@ -8,7 +8,7 @@ the human-readable investigation report (that's the Synthesizer's job).
 import uuid
 from datetime import datetime, timezone
 
-from langchain_google_vertexai import ChatVertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import settings
 from app.graph.state import InvestigationState
@@ -137,10 +137,8 @@ async def incident_analysis_node(state: InvestigationState) -> dict:
     Correlates all evidence into ranked root-cause hypotheses.
     Always flows to synthesizer_node next.
     """
-    llm = ChatVertexAI(
-        model_name=settings.gemini_model,
-        project=settings.gcp_project_id,
-        location=settings.gcp_region,
+    llm = ChatGoogleGenerativeAI(
+        model=settings.gemini_model,
         temperature=0.15,
     )
     structured_llm = llm.with_structured_output(AnalysisOutput)

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from langchain_google_vertexai import ChatVertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import text
 
@@ -107,10 +107,8 @@ async def generate_deployment_summary(
         return "No deployments found in the search window."
 
     if llm is None:
-        llm = ChatVertexAI(
-            model_name=settings.gemini_model,
-            project=settings.gcp_project_id,
-            location=settings.gcp_region,
+        llm = ChatGoogleGenerativeAI(
+            model=settings.gemini_model,
             temperature=0.1,
         )
 

@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from langchain_google_vertexai import VertexAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from sqlalchemy import text
 
 from app.config import settings
@@ -24,10 +24,8 @@ _CATEGORY_TO_INCIDENT_TYPE = {
 
 async def _embed_text(text_to_embed: str) -> list[float] | None:
     try:
-        embedder = VertexAIEmbeddings(
-            model_name=settings.embedding_model,
-            project=settings.gcp_project_id,
-            location=settings.gcp_region,
+        embedder = GoogleGenerativeAIEmbeddings(
+            model=settings.embedding_model,
         )
         return await embedder.aembed_query(text_to_embed)
     except Exception as exc:

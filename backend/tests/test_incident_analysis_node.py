@@ -74,7 +74,7 @@ def _make_state(
     }
 
 
-@patch("app.graph.nodes.incident_analysis.ChatVertexAI")
+@patch("app.graph.nodes.incident_analysis.ChatGoogleGenerativeAI")
 @pytest.mark.asyncio
 async def test_produces_analysis_output(mock_llm_class):
     analysis = _make_analysis_output(confidence_pct=88.0)
@@ -92,7 +92,7 @@ async def test_produces_analysis_output(mock_llm_class):
     assert result["timeline"][0].source == "incident_analysis"
 
 
-@patch("app.graph.nodes.incident_analysis.ChatVertexAI")
+@patch("app.graph.nodes.incident_analysis.ChatGoogleGenerativeAI")
 @pytest.mark.asyncio
 async def test_sets_phase_escalated_when_requires_escalation(mock_llm_class):
     hyp = _make_hypothesis(confidence_pct=25.0)
@@ -114,7 +114,7 @@ async def test_sets_phase_escalated_when_requires_escalation(mock_llm_class):
     assert result["escalation_reason"] is not None
 
 
-@patch("app.graph.nodes.incident_analysis.ChatVertexAI")
+@patch("app.graph.nodes.incident_analysis.ChatGoogleGenerativeAI")
 @pytest.mark.asyncio
 async def test_escalates_on_llm_failure(mock_llm_class):
     mock_structured = MagicMock()
@@ -131,7 +131,7 @@ async def test_escalates_on_llm_failure(mock_llm_class):
     assert "Gemini timeout" in result["error_log"][0].message
 
 
-@patch("app.graph.nodes.incident_analysis.ChatVertexAI")
+@patch("app.graph.nodes.incident_analysis.ChatGoogleGenerativeAI")
 @pytest.mark.asyncio
 async def test_timeline_contains_confidence_in_description(mock_llm_class):
     analysis = _make_analysis_output(confidence_pct=88.0)
@@ -147,7 +147,7 @@ async def test_timeline_contains_confidence_in_description(mock_llm_class):
     assert "88" in description  # confidence_pct
 
 
-@patch("app.graph.nodes.incident_analysis.ChatVertexAI")
+@patch("app.graph.nodes.incident_analysis.ChatGoogleGenerativeAI")
 @pytest.mark.asyncio
 async def test_uses_structured_output_with_analysis_output_schema(mock_llm_class):
     """Confirm the node calls with_structured_output(AnalysisOutput), not SynthesisOutput."""

@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import text
 
@@ -20,10 +20,8 @@ logger = logging.getLogger(__name__)
 async def _embed_query(query_text: str) -> list[float] | None:
     """Generate an embedding via Vertex AI text-embedding model."""
     try:
-        embedder = VertexAIEmbeddings(
-            model_name=settings.embedding_model,
-            project=settings.gcp_project_id,
-            location=settings.gcp_region,
+        embedder = GoogleGenerativeAIEmbeddings(
+            model=settings.embedding_model,
         )
         return await embedder.aembed_query(query_text)
     except Exception:
@@ -146,10 +144,8 @@ async def _generate_knowledge_summary(
     llm: Any = None,
 ) -> str:
     if llm is None:
-        llm = ChatVertexAI(
-            model_name=settings.gemini_model,
-            project=settings.gcp_project_id,
-            location=settings.gcp_region,
+        llm = ChatGoogleGenerativeAI(
+            model=settings.gemini_model,
             temperature=0.1,
         )
 

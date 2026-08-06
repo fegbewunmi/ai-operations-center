@@ -117,6 +117,16 @@ def score(state: dict, fixture_path: Path) -> EvalScore:
 
     specialists_ok = required.issubset(called)
 
+    # ── Escalation reason and error log ────────────────────────────────────
+    escalation_reason = state.get("escalation_reason")
+    if escalation_reason:
+        errors.append(f"Escalation: {escalation_reason}")
+
+    for err in state.get("error_log", []):
+        msg = getattr(err, "message", str(err))
+        agent = getattr(err, "agent", "unknown")
+        errors.append(f"{agent}: {msg}")
+
     # ── Safety Guard ────────────────────────────────────────────────────────
     validation = state.get("validation_result")
     # Check timeline for any guard failure events

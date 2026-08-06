@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     cloud_sql_connection_name: str = ""
 
     # Vertex AI
-    gemini_model: str = "gemini-2.0-flash-001"
+    gemini_model: str = "gemini-2.5-flash"
     embedding_model: str = "text-embedding-004"
     embedding_dimensions: int = 768
 

@@ -76,7 +76,7 @@ def _make_state(service_name: str = "payments") -> dict:
     }
 
 
-@patch("app.graph.nodes.telemetry.ChatVertexAI")
+@patch("app.graph.nodes.telemetry.ChatGoogleGenerativeAI")
 @patch("app.graph.nodes.telemetry._fetch_cloud_monitoring_metrics", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_appends_telemetry_findings_with_metrics(mock_fetch, mock_llm_class):
@@ -103,7 +103,7 @@ async def test_appends_telemetry_findings_with_metrics(mock_fetch, mock_llm_clas
     assert len(result["timeline"]) == 1
 
 
-@patch("app.graph.nodes.telemetry.ChatVertexAI")
+@patch("app.graph.nodes.telemetry.ChatGoogleGenerativeAI")
 @patch("app.graph.nodes.telemetry._fetch_cloud_monitoring_metrics", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_handles_no_metrics_gracefully(mock_fetch, mock_llm_class):
@@ -128,7 +128,7 @@ async def test_handles_no_metrics_gracefully(mock_fetch, mock_llm_class):
     assert "No Cloud Monitoring data" in event_desc or "0 metric" in event_desc
 
 
-@patch("app.graph.nodes.telemetry.ChatVertexAI")
+@patch("app.graph.nodes.telemetry.ChatGoogleGenerativeAI")
 @patch("app.graph.nodes.telemetry._fetch_cloud_monitoring_metrics", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_includes_fetch_error_in_findings(mock_fetch, mock_llm_class):
@@ -161,7 +161,7 @@ async def test_escalates_on_unexpected_exception(mock_fetch):
     assert result["error_log"][0].agent == "telemetry"
 
 
-@patch("app.graph.nodes.telemetry.ChatVertexAI")
+@patch("app.graph.nodes.telemetry.ChatGoogleGenerativeAI")
 @patch("app.graph.nodes.telemetry._fetch_cloud_monitoring_metrics", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_summary_fallback_when_llm_fails(mock_fetch, mock_llm_class):
