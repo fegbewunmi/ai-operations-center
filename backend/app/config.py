@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     database_url: str
     cloud_sql_connection_name: str = ""
 
-    # Vertex AI
-    vertex_ai_location: str = "us-central1"
+    # Gemini (Google Agent Platform / Vertex AI unified SDK)
+    gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash"
     embedding_model: str = "text-embedding-004"
 

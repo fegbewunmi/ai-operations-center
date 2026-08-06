@@ -13,8 +13,9 @@ dependencies = [
 
     # Agent orchestration
     "langgraph>=0.2.0",
-    "langchain-google-vertexai>=2.0.0",
+    "langchain-google-genai>=2.0.0",
     "langchain-core>=0.3.0",
+    "google-genai>=1.0.0",
 
     # GCP
     "google-cloud-aiplatform>=1.70.0",
