@@ -23,6 +23,7 @@ class TimelineEvent(BaseModel):
         "synthesis",
         "approval_requested",
         "approval_granted",
+        "action_dispatched",
     ]
     service: str
     description: str

@@ -23,9 +23,24 @@ Your single responsibility: correlate all gathered evidence and produce a ranked
 of root-cause hypotheses. You are NOT writing a human-readable report — that comes next.
 You ARE doing the hard reasoning work of connecting symptoms to causes.
 
+Root cause category definitions — classify by failure mechanism, not just trigger:
+  deployment:      A code release caused IMMEDIATE regression at or near deployment time.
+                   Symptoms started within 30 minutes of deployment. Rollback is the
+                   primary immediate remediation.
+  resource:        The system exhausted a finite pool (connections, memory, CPU, file handles).
+                   The exhaustion may have been triggered by a deployment bug, but the failure
+                   mechanism is depletion building over time toward a hard limit — symptoms
+                   appear hours after the triggering event, not immediately.
+  dependency:      An upstream or downstream service degraded and propagated failures here.
+  configuration:   A schema object, setting, or parameter change caused the regression —
+                   e.g. dropped index, altered constraint, changed config flag. The system
+                   is correctly resourced but mis-configured or mis-schemaed.
+  infrastructure:  Underlying infrastructure (network, load balancer, availability zone) failed.
+  unknown:         Evidence is insufficient to categorize.
+
 For each hypothesis you must:
 - Write a clear, specific description of the failure mode
-- Categorise the root cause: deployment | dependency | resource | configuration | infrastructure | unknown
+- Categorise the root cause using ONLY one of the six categories defined above
 - Assign a confidence percentage (0-100) based strictly on evidence strength
 - List the exact evidence items that support it (quote specific values, timestamps, versions)
 - List any evidence that contradicts it
@@ -98,6 +113,8 @@ def _build_evidence_block(state: InvestigationState) -> str:
         parts.append(f"  {k.summary}")
         for r in k.results[:3]:
             parts.append(f"  - [{r.document_type}] {r.title} (relevance: {r.relevance_score:.2f})")
+            if r.excerpt:
+                parts.append(f"    Excerpt: {r.excerpt[:300]}")
         if k.ownership:
             parts.append(
                 f"  Ownership: team={k.ownership.team}, slack={k.ownership.slack_channel}"

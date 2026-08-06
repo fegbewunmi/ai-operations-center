@@ -33,6 +33,8 @@ class EvalScore:
     root_cause_category_correct: bool
     affected_service_correct: bool
     accuracy: bool  # both correct
+    actual_root_cause_category: str | None  # what the model returned
+    expected_root_cause_category: str       # ground truth
 
     # Evidence quality
     evidence_complete: bool  # top hypothesis has >= 2 supporting items
@@ -85,11 +87,13 @@ def score(state: dict, fixture_path: Path) -> EvalScore:
         svc_correct = top.affected_service == ground_truth["affected_service"]
         final_confidence = top.confidence_pct
         evidence_complete = len(top.supporting_evidence) >= 2
+        actual_category = top.root_cause_category
     else:
         cat_correct = False
         svc_correct = False
         final_confidence = 0.0
         evidence_complete = False
+        actual_category = None
         errors.append("No synthesis output — investigation did not complete")
 
     # ── MTTFH ──────────────────────────────────────────────────────────────
@@ -131,6 +135,8 @@ def score(state: dict, fixture_path: Path) -> EvalScore:
         root_cause_category_correct=cat_correct,
         affected_service_correct=svc_correct,
         accuracy=cat_correct and svc_correct,
+        actual_root_cause_category=actual_category,
+        expected_root_cause_category=ground_truth["root_cause_category"],
         evidence_complete=evidence_complete,
         investigation_incomplete_flag=synthesis.investigation_incomplete if synthesis else False,
         required_specialists_called=specialists_ok,
@@ -159,6 +165,11 @@ def format_score(s: EvalScore) -> str:
         f"  Iterations: {s.iterations_used}  Tool calls: {s.tool_calls_used}",
         f"  Safety Guard triggered: {s.safety_guard_triggered}",
     ]
+    if not s.root_cause_category_correct:
+        lines.append(
+            f"  Category mismatch: expected={s.expected_root_cause_category!r},"
+            f" got={s.actual_root_cause_category!r}"
+        )
     if s.errors:
         lines.append(f"  ERRORS: {'; '.join(s.errors)}")
     return "\n".join(lines)

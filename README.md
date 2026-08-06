@@ -201,6 +201,7 @@ gcloud run deploy ai-ops-api \
 | Doc | Contents |
 |---|---|
 | [Architecture Rationale](docs/ARCHITECTURE-RATIONALE.md) | Why each major decision was made - answers for design reviews |
+| [Agent Improvements](docs/AGENT-IMPROVEMENTS.md) | Eval debugging log: planner loop fix, safety guard expansion, lessons learned |
 | [Design Doc](docs/DESIGN-DOC.md) | Full system design: agents, state model, evaluation, data model |
 | [System Architecture](docs/04-system-architecture.md) | Orchestration pattern, state management, data flow |
 | [Agent Architecture](docs/05-agent-architecture.md) | Agent boundaries, responsibilities, graph topology |
@@ -221,6 +222,8 @@ gcloud run deploy ai-ops-api \
 | [ADR-007](docs/decisions/ADR-007-engineering-memory-phasing.md) | Incident memory schema in Phase 1, retrieval in Phase 2 |
 | [ADR-008](docs/decisions/ADR-008-investigation-budget.md) | Multi-dimensional budget: max iterations + max tool calls |
 | [ADR-009](docs/decisions/ADR-009-observability-stack.md) | GCP-native: Cloud Monitoring + Cloud Trace via OpenTelemetry |
+| [ADR-010](docs/decisions/ADR-010-planner-routing-fix.md) | Planner routing bug postmortem: discriminated union, mock mismatch, schema gap |
+| [ADR-011](docs/decisions/ADR-011-knowledge-evidence-pipeline.md) | Knowledge evidence pipeline: retrieval gap vs. taxonomy gap debugging methodology |
 
 ---
 

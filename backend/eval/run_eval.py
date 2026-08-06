@@ -82,6 +82,8 @@ async def main(fixture_id: str | None = None, output_path: str | None = None) ->
                     "final_phase": s.final_phase,
                     "accuracy": s.accuracy,
                     "root_cause_category_correct": s.root_cause_category_correct,
+                    "expected_root_cause_category": s.expected_root_cause_category,
+                    "actual_root_cause_category": s.actual_root_cause_category,
                     "affected_service_correct": s.affected_service_correct,
                     "evidence_complete": s.evidence_complete,
                     "required_specialists_called": s.required_specialists_called,

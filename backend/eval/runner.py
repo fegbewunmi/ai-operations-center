@@ -55,7 +55,7 @@ def _build_mock_fetch_metrics(telemetry_fixture: dict):
 
 
 def _build_mock_fetch_deployments(deployment_fixture: dict, onset_dt: datetime):
-    async def _mock(service_name: str, window_start: datetime, window_end: datetime, onset_dt_arg: datetime):
+    async def _mock(service_name: str, window_start: datetime, window_end: datetime, onset_dt: datetime):
         raw = deployment_fixture.get(service_name, [])
         records = []
         for d in raw:

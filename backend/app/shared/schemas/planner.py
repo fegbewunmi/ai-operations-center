@@ -1,12 +1,13 @@
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .core import TimeWindow
 
 
 class TelemetryQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    query_type: Literal["telemetry"] = "telemetry"
     service_name: str
     time_window: TimeWindow
     investigation_query: str
@@ -15,6 +16,7 @@ class TelemetryQuery(BaseModel):
 
 class DeploymentQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    query_type: Literal["deployment"] = "deployment"
     service_name: str
     time_window: TimeWindow
     investigation_query: str
@@ -22,6 +24,7 @@ class DeploymentQuery(BaseModel):
 
 class KnowledgeQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    query_type: Literal["knowledge"] = "knowledge"
     query: str
     service_name: str | None = None
     document_types: list[Literal["runbook", "postmortem", "architecture_doc", "error_pattern"]] | None = None
@@ -29,7 +32,7 @@ class KnowledgeQuery(BaseModel):
 
 AgentQuery = Annotated[
     Union[TelemetryQuery, DeploymentQuery, KnowledgeQuery],
-    "Query passed from Planner to the target specialist agent"
+    Field(discriminator="query_type")
 ]
 
 

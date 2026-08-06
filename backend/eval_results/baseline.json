@@ -1,0 +1,59 @@
+{
+  "run_at": "2026-08-06T20:21:06.661854+00:00",
+  "results": [
+    {
+      "incident_id": "INC-FD-001",
+      "fixture_path": "/Users/ski/ai-operations/backend/eval/fixtures/INC-FD-001.json",
+      "final_phase": "complete",
+      "accuracy": true,
+      "root_cause_category_correct": true,
+      "expected_root_cause_category": "deployment",
+      "actual_root_cause_category": "deployment",
+      "affected_service_correct": true,
+      "evidence_complete": true,
+      "required_specialists_called": true,
+      "final_confidence": 90.0,
+      "mttfh_seconds": 49.698445,
+      "iterations_used": 4,
+      "tool_calls_used": 4,
+      "safety_guard_triggered": false,
+      "errors": []
+    },
+    {
+      "incident_id": "INC-LR-001",
+      "fixture_path": "/Users/ski/ai-operations/backend/eval/fixtures/INC-LR-001.json",
+      "final_phase": "complete",
+      "accuracy": true,
+      "root_cause_category_correct": true,
+      "expected_root_cause_category": "configuration",
+      "actual_root_cause_category": "configuration",
+      "affected_service_correct": true,
+      "evidence_complete": true,
+      "required_specialists_called": true,
+      "final_confidence": 85.0,
+      "mttfh_seconds": 44.279205,
+      "iterations_used": 4,
+      "tool_calls_used": 4,
+      "safety_guard_triggered": false,
+      "errors": []
+    },
+    {
+      "incident_id": "INC-RL-001",
+      "fixture_path": "/Users/ski/ai-operations/backend/eval/fixtures/INC-RL-001.json",
+      "final_phase": "complete",
+      "accuracy": true,
+      "root_cause_category_correct": true,
+      "expected_root_cause_category": "resource",
+      "actual_root_cause_category": "resource",
+      "affected_service_correct": true,
+      "evidence_complete": true,
+      "required_specialists_called": true,
+      "final_confidence": 95.0,
+      "mttfh_seconds": 48.919421,
+      "iterations_used": 4,
+      "tool_calls_used": 4,
+      "safety_guard_triggered": false,
+      "errors": []
+    }
+  ]
+}

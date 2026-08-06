@@ -27,14 +27,19 @@ Each iteration you receive the full investigation state and must output one deci
 
 Rules:
 - Start with telemetry on the affected service to establish the symptom baseline.
-- Check deployment history if you see sudden changes or if timing is suspicious.
-- Use knowledge search to find runbooks or similar past incidents.
-- Never repeat a query you have already made - each call must explore new evidence.
-- If telemetry returns no data or says "not instrumented", do NOT retry telemetry - move to deployment or knowledge instead.
-- If an agent returns empty results, accept that and move on to the next evidence source.
-- Set working_confidence based on how well your hypothesis explains all symptoms observed.
-- Move to synthesize when confidence >= {threshold} or you have covered all evidence angles.
-- You MUST synthesize if you have checked telemetry, deployment, AND knowledge - do not keep invoking agents after all three have been queried.
+- After telemetry, call deployment to check for recent changes near the incident onset.
+- After deployment, call knowledge to search runbooks and postmortems for matching patterns.
+- CRITICAL: Each specialist may only be called ONCE per investigation. The user message shows
+  both "Agents called" and a FORBIDDEN ACTIONS list. Obey the FORBIDDEN list exactly - if an
+  agent appears there, you MUST NOT invoke it. Choose a different agent or synthesize/escalate.
+- If an agent returns no data or empty results, accept that and move to the next uncalled agent.
+- Once all three agents have been called, you MUST choose synthesize or escalate - never invoke.
+- When invoking, ALWAYS set query.query_type to match the agent field exactly:
+    agent="telemetry"   requires  query.query_type="telemetry"
+    agent="deployment"  requires  query.query_type="deployment"
+    agent="knowledge"   requires  query.query_type="knowledge"
+- Set working_confidence based on how well your hypothesis explains all observed symptoms.
+- Move to synthesize when confidence >= {threshold} or you have called all available agents.
 - Always populate the reason field - it is the primary artifact for debugging and evaluation.
 """.strip()
 
@@ -97,10 +102,19 @@ async def _fetch_topology(service_name: str) -> ServiceTopology | None:
 
 
 def _evidence_summary(state: InvestigationState) -> str:
-    """Build a concise, LLM-readable summary of all evidence gathered so far."""
+    """
+    Build a concise, LLM-readable summary of accumulated evidence.
+    De-duplicates by showing only the most recent finding per service per agent type
+    so repeated calls don't inflate the prompt with identical blocks.
+    """
     parts: list[str] = []
 
-    for f in state["telemetry_findings"]:
+    # Most recent telemetry finding per service
+    seen: set[str] = set()
+    for f in reversed(state["telemetry_findings"]):
+        if f.service in seen:
+            continue
+        seen.add(f.service)
         parts.append(f"[Telemetry - {f.service}]")
         parts.append(f.summary)
         if f.anomalous_metrics:
@@ -112,7 +126,12 @@ def _evidence_summary(state: InvestigationState) -> str:
             parts.append(f"p99 latency change: {f.latency_p99_change_pct:+.1f}%")
         parts.append("")
 
-    for f in state["deployment_findings"]:
+    # Most recent deployment finding per service
+    seen = set()
+    for f in reversed(state["deployment_findings"]):
+        if f.service in seen:
+            continue
+        seen.add(f.service)
         parts.append(f"[Deployments - {f.service}]")
         parts.append(f.summary)
         parts.append(f"Deployment near onset: {f.deployment_near_onset}")
@@ -120,6 +139,7 @@ def _evidence_summary(state: InvestigationState) -> str:
             parts.append(f"Nearest deploy: {f.nearest_deployment_minutes:.0f} min before incident")
         parts.append("")
 
+    # All knowledge queries (each is a distinct search, keep them all)
     for k in state["knowledge_context"]:
         parts.append(f"[Knowledge - query: {k.query}]")
         parts.append(k.summary)
@@ -174,6 +194,80 @@ def _build_user_message(state: InvestigationState, topology: ServiceTopology | N
             "  Do NOT synthesize again with the same confidence level.",
             "",
         ]
+
+    # Explicit agent call tracking — tells the planner exactly what has and hasn't been invoked
+    n_telemetry  = len(state.get("telemetry_findings", []))
+    n_deployment = len(state.get("deployment_findings", []))
+    n_knowledge  = len(state.get("knowledge_context", []))
+
+    called   = [f"telemetry({n_telemetry}x)"  if n_telemetry  else None,
+                f"deployment({n_deployment}x)" if n_deployment else None,
+                f"knowledge({n_knowledge}x)"   if n_knowledge  else None]
+    uncalled = ["telemetry"  if not n_telemetry  else None,
+                "deployment" if not n_deployment else None,
+                "knowledge"  if not n_knowledge  else None]
+
+    lines += [
+        "INVESTIGATION PROGRESS:",
+        f"  Agents called:     {', '.join(c for c in called   if c) or 'none'}",
+        f"  Agents not called: {', '.join(u for u in uncalled if u) or 'all called'}",
+        "",
+    ]
+
+    # Explicit FORBIDDEN list — per-iteration constraints the LLM must not violate
+    forbidden = []
+    if n_telemetry > 0:
+        forbidden.append(f"agent='telemetry' (called {n_telemetry}x — cannot repeat)")
+    if n_deployment > 0:
+        forbidden.append(f"agent='deployment' (called {n_deployment}x — cannot repeat)")
+    if n_knowledge > 0:
+        forbidden.append(f"agent='knowledge' (called {n_knowledge}x — cannot repeat)")
+
+    if forbidden:
+        lines += [
+            "FORBIDDEN ACTIONS (protocol violation to use these):",
+        ]
+        for f_item in forbidden:
+            lines.append(f"  - {f_item}")
+        lines.append("")
+
+    # Detect if deployment was called but found nothing near onset (> 60 min gap)
+    no_recent_deploy = False
+    deploy_gap_str = ""
+    if state.get("deployment_findings"):
+        dep = state["deployment_findings"][-1]
+        no_recent_deploy = (
+            dep.nearest_deployment_minutes is not None and dep.nearest_deployment_minutes > 720
+        )
+        if dep.nearest_deployment_minutes is not None:
+            deploy_gap_str = f"{dep.nearest_deployment_minutes:.0f} min before onset"
+
+    if not n_telemetry and not n_deployment and not n_knowledge:
+        lines += [
+            "REQUIRED NEXT ACTION: invoke telemetry first to establish the symptom baseline.",
+            "",
+        ]
+    elif all([n_telemetry, n_deployment, n_knowledge]):
+        lines += [
+            "REQUIRED NEXT ACTION: all agents called — you MUST synthesize or escalate now.",
+            "",
+        ]
+    else:
+        next_agents = [u for u in uncalled if u]
+        if no_recent_deploy and not n_knowledge and n_deployment:
+            gap_note = f" (nearest: {deploy_gap_str})" if deploy_gap_str else ""
+            lines += [
+                f"REQUIRED NEXT ACTION: Deployment agent found no deployment near onset{gap_note} — "
+                f"a code change is not the likely cause. For non-deployment-triggered incidents, "
+                f"knowledge (runbooks, postmortems) is the primary diagnostic. "
+                f"Do NOT synthesize yet — invoke knowledge first.",
+                "",
+            ]
+        else:
+            lines += [
+                f"REQUIRED NEXT ACTION: invoke one of the uncalled agents: {', '.join(next_agents)}",
+                "",
+            ]
 
     lines += [
         "ACCUMULATED EVIDENCE:",
