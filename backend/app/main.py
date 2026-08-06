@@ -31,7 +31,10 @@ async def lifespan(app: FastAPI):
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
     from app.graph import graph as graph_module
 
-    async with AsyncPostgresSaver.from_conn_string(settings.database_url) as checkpointer:
+    # AsyncPostgresSaver uses psycopg directly and expects a plain postgresql:// URL.
+    # settings.database_url uses postgresql+asyncpg:// for SQLAlchemy - strip the driver prefix.
+    psycopg_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+    async with AsyncPostgresSaver.from_conn_string(psycopg_url) as checkpointer:
         await checkpointer.setup()  # creates langgraph checkpoint tables if not present
         graph_module.investigation_graph = graph_module.build_graph(checkpointer=checkpointer)
         yield
