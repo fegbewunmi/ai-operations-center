@@ -693,6 +693,9 @@ The most important change is the Evaluator split. "Evaluator Agent" as a single 
 | ADR-007 | Engineering memory schema defined in Phase 1; write path implemented in Phase 2 | Accepted |
 | ADR-008 | Investigation governed by multi-dimensional budget (iterations, tokens, latency, confidence threshold), not iteration count | Accepted |
 | ADR-009 | GCP-native observability: Cloud Monitoring + Cloud Logging + Cloud Trace via OpenTelemetry | Accepted |
+| ADR-010 | Planner routing bug postmortem: discriminated union, mock mismatch, schema gap | Resolved |
+| ADR-011 | Knowledge evidence pipeline: retrieval gap vs. taxonomy gap debugging methodology | Resolved |
+| ADR-012 | LLM token and cost tracking: per-node `token_log` in state, DB columns deferred | Accepted |
 
 Full ADR text (context, options, consequences) for each decision: `docs/decisions/`.
 
@@ -705,3 +708,6 @@ Full ADR text (context, options, consequences) for each decision: `docs/decision
 | **Phase 1 - Core investigation loop** | Read-only investigation for 3 incident families · Full agent graph · 15-incident eval harness · Orion Commerce synthetic environment · Cloud Monitoring dashboard | In design |
 | **Phase 2 - Engineering memory** | Write completed investigations to Cloud SQL + pgvector · Knowledge Agent retrieves similar past incidents · Eval comparison: with vs. without memory | Planned |
 | **Phase 3 - Action execution** | Level 2 and Level 3 actions fully wired (Jira, Slack, PagerDuty, rollback) · Human approval workflow end-to-end | Planned |
+
+**Deferred (not dropped):**
+- DB columns for LLM token tracking (`budget_input_tokens`, `budget_output_tokens`): `InvestigationBudget` tracks these in Pydantic state and the eval harness surfaces them; DB columns deferred until there is a query consumer (dashboard, cost-per-service API). See ADR-012.

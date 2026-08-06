@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db.session import AsyncSessionLocal
+from app.graph.llm_tracking import extract_usage, node_usage
 from app.graph.state import InvestigationState
 from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
@@ -142,7 +143,8 @@ async def _generate_knowledge_summary(
     service_name: str | None,
     ownership: ServiceOwnership | None,
     llm: Any = None,
-) -> str:
+) -> tuple[str, Any]:
+    """Returns (summary_text, raw_AIMessage) so callers can extract token usage."""
     if llm is None:
         llm = ChatGoogleGenerativeAI(
             model=settings.gemini_model,
@@ -180,7 +182,7 @@ async def _generate_knowledge_summary(
         SystemMessage(content="You are an SRE reviewing runbooks and postmortems during an incident."),
         HumanMessage(content=prompt),
     ])
-    return response.content.strip()
+    return response.content.strip(), response
 
 
 @traced_node("knowledge")
@@ -219,15 +221,23 @@ async def knowledge_node(state: InvestigationState) -> dict:
         except Exception:
             pass
 
+    budget = state["budget"]
+    in_tok = out_tok = 0
     try:
-        summary = await _generate_knowledge_summary(
+        summary, llm_response = await _generate_knowledge_summary(
             results=results,
             query=query.query,
             service_name=query.service_name,
             ownership=ownership,
         )
+        in_tok, out_tok = extract_usage(llm_response)
     except Exception as exc:
         summary = f"Summary generation failed: {exc}"
+
+    updated_budget = budget.model_copy(update={
+        "input_tokens_used": budget.input_tokens_used + in_tok,
+        "output_tokens_used": budget.output_tokens_used + out_tok,
+    })
 
     context = KnowledgeContext(
         query=query.query,
@@ -250,4 +260,6 @@ async def knowledge_node(state: InvestigationState) -> dict:
         "knowledge_context": [context],
         "timeline": [event],
         "phase": "planning",
+        "budget": updated_budget,
+        "token_log": [node_usage("knowledge", settings.gemini_model, in_tok, out_tok)],
     }

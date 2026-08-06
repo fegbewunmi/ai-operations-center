@@ -22,7 +22,8 @@ class InvestigationBudget(BaseModel):
 
     iterations_used: int = 0
     tool_calls_used: int = 0
-    tokens_used: int = 0
+    input_tokens_used: int = 0
+    output_tokens_used: int = 0
     elapsed_seconds: float = 0.0
 
     @property

@@ -8,6 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
+from app.graph.llm_tracking import extract_usage, node_usage
 from app.graph.state import InvestigationState
 from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
@@ -115,7 +116,8 @@ async def _generate_telemetry_summary(
     service_name: str,
     error: str | None,
     llm: Any = None,
-) -> str:
+) -> tuple[str, Any]:
+    """Returns (summary_text, raw_AIMessage) so callers can extract token usage."""
     if llm is None:
         llm = ChatGoogleGenerativeAI(
             model=settings.gemini_model,
@@ -150,7 +152,7 @@ async def _generate_telemetry_summary(
         SystemMessage(content="You are an SRE analysing telemetry data during an incident."),
         HumanMessage(content=prompt),
     ])
-    return response.content.strip()
+    return response.content.strip(), response
 
 
 @traced_node("telemetry")
@@ -186,20 +188,28 @@ async def telemetry_node(state: InvestigationState) -> dict:
         }
 
     anomalous = [m for m in metrics if m.is_anomalous]
+    budget = state["budget"]
 
+    in_tok = out_tok = 0
     try:
-        summary = await _generate_telemetry_summary(
+        summary, llm_response = await _generate_telemetry_summary(
             metrics=metrics,
             query=query.investigation_query,
             incident_description=incident.description,
             service_name=query.service_name,
             error=fetch_error,
         )
+        in_tok, out_tok = extract_usage(llm_response)
     except Exception:
         if not metrics:
             summary = f"No Cloud Monitoring data found for {query.service_name}. Service may not be instrumented or uses a different metric label."
         else:
             summary = f"Retrieved {len(metrics)} metric points but summary generation unavailable."
+
+    updated_budget = budget.model_copy(update={
+        "input_tokens_used": budget.input_tokens_used + in_tok,
+        "output_tokens_used": budget.output_tokens_used + out_tok,
+    })
 
     findings = TelemetryFindings(
         service=query.service_name,
@@ -226,4 +236,6 @@ async def telemetry_node(state: InvestigationState) -> dict:
         "telemetry_findings": [findings],
         "timeline": [event],
         "phase": "planning",
+        "budget": updated_budget,
+        "token_log": [node_usage("telemetry", settings.gemini_model, in_tok, out_tok)],
     }

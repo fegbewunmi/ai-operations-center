@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import settings
+from app.graph.llm_tracking import extract_usage, node_usage
 from app.graph.state import InvestigationState
 from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
@@ -141,10 +142,11 @@ async def incident_analysis_node(state: InvestigationState) -> dict:
         model=settings.gemini_model,
         temperature=0.15,
     )
-    structured_llm = llm.with_structured_output(AnalysisOutput)
+    structured_llm = llm.with_structured_output(AnalysisOutput, include_raw=True)
 
     evidence = _build_evidence_block(state)
     incident = state["incident"]
+    budget = state["budget"]
 
     user_msg = (
         f"{evidence}\n\n"
@@ -157,11 +159,15 @@ async def incident_analysis_node(state: InvestigationState) -> dict:
         "- Cite specific evidence: timestamps, versions, metric values"
     )
 
+    raw_result: dict = {}
     try:
-        analysis: AnalysisOutput = await structured_llm.ainvoke([
+        raw_result = await structured_llm.ainvoke([
             ("system", _SYSTEM_PROMPT),
             ("human", user_msg),
         ])
+        if raw_result.get("parsing_error"):
+            raise ValueError(f"Structured output parse error: {raw_result['parsing_error']}")
+        analysis: AnalysisOutput = raw_result["parsed"]
     except Exception as exc:
         return {
             "error_log": [AgentError(
@@ -175,6 +181,12 @@ async def incident_analysis_node(state: InvestigationState) -> dict:
             "phase": "escalated",
             "escalation_reason": f"Incident Analysis Agent failed: {exc}",
         }
+
+    in_tok, out_tok = extract_usage(raw_result)
+    updated_budget = budget.model_copy(update={
+        "input_tokens_used": budget.input_tokens_used + in_tok,
+        "output_tokens_used": budget.output_tokens_used + out_tok,
+    })
 
     event = TimelineEvent(
         timestamp=datetime.now(timezone.utc),
@@ -194,6 +206,8 @@ async def incident_analysis_node(state: InvestigationState) -> dict:
         "analysis_output": analysis,
         "phase": phase,
         "timeline": [event],
+        "budget": updated_budget,
+        "token_log": [node_usage("incident_analysis", settings.gemini_model, in_tok, out_tok)],
     }
 
     if analysis.requires_escalation:

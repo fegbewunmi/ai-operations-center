@@ -22,6 +22,9 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.config import settings
+from app.graph.llm_tracking import llm_cost_usd
+
 
 @dataclass
 class EvalScore:
@@ -49,6 +52,9 @@ class EvalScore:
     mttfh_seconds: float
     iterations_used: int
     tool_calls_used: int
+    total_input_tokens: int
+    total_output_tokens: int
+    estimated_cost_usd: float
 
     # Confidence
     final_confidence: float
@@ -138,6 +144,12 @@ def score(state: dict, fixture_path: Path) -> EvalScore:
                 guard_failed = True
                 break
 
+    total_input_tokens = budget.input_tokens_used
+    total_output_tokens = budget.output_tokens_used
+    estimated_cost_usd = llm_cost_usd(
+        settings.gemini_model, total_input_tokens, total_output_tokens
+    )
+
     return EvalScore(
         incident_id=incident_id,
         fixture_path=str(fixture_path),
@@ -155,6 +167,9 @@ def score(state: dict, fixture_path: Path) -> EvalScore:
         mttfh_seconds=mttfh,
         iterations_used=budget.iterations_used,
         tool_calls_used=budget.tool_calls_used,
+        total_input_tokens=total_input_tokens,
+        total_output_tokens=total_output_tokens,
+        estimated_cost_usd=estimated_cost_usd,
         final_confidence=final_confidence,
         safety_guard_triggered=guard_failed,
         errors=errors,
@@ -173,6 +188,8 @@ def format_score(s: EvalScore) -> str:
         f"  Confidence: {s.final_confidence:.0f}%",
         f"  MTTFH: {s.mttfh_seconds:.0f}s",
         f"  Iterations: {s.iterations_used}  Tool calls: {s.tool_calls_used}",
+        f"  Tokens:   {s.total_input_tokens:,} in / {s.total_output_tokens:,} out"
+        f"  Cost: ${s.estimated_cost_usd:.4f}",
         f"  Safety Guard triggered: {s.safety_guard_triggered}",
     ]
     if not s.root_cause_category_correct:
@@ -198,6 +215,9 @@ def format_summary(scores: list[EvalScore]) -> str:
         1, sum(1 for s in scores if s.mttfh_seconds != float("inf"))
     )
     guard_rate = sum(1 for s in scores if s.safety_guard_triggered) / n
+    total_in = sum(s.total_input_tokens for s in scores)
+    total_out = sum(s.total_output_tokens for s in scores)
+    total_cost = sum(s.estimated_cost_usd for s in scores)
 
     lines = [
         "",
@@ -210,6 +230,8 @@ def format_summary(scores: list[EvalScore]) -> str:
         f"  Completed (not escalated):{complete:.0%}",
         f"  Avg MTTFH:                {avg_mttfh:.0f}s  (target < 300s)",
         f"  Safety Guard trigger rate:{guard_rate:.0%}  (target < 30%)",
+        f"  Total tokens:             {total_in:,} in / {total_out:,} out",
+        f"  Estimated cost:           ${total_cost:.4f}",
         "─" * 60,
         "  SHIP THRESHOLDS:",
         f"  {'✓' if accuracy >= 0.75  else '✗'} Root-cause accuracy >= 75%: {accuracy:.0%}",

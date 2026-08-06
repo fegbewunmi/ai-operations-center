@@ -11,6 +11,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
+from app.graph.llm_tracking import extract_usage, node_usage
 from app.graph.state import InvestigationState
 from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
@@ -80,17 +81,20 @@ async def synthesizer_node(state: InvestigationState) -> dict:
         }
 
     incident = state["incident"]
+    budget = state["budget"]
     llm = ChatGoogleGenerativeAI(
         model=settings.gemini_model,
         temperature=0.3,
     )
 
+    in_tok = out_tok = 0
     try:
         response = await llm.ainvoke([
             SystemMessage(content=_SYSTEM_PROMPT),
             HumanMessage(content=_hypothesis_block(state)),
         ])
         summary = response.content.strip()
+        in_tok, out_tok = extract_usage(response)
     except Exception as exc:
         # Non-fatal: fall back to a mechanical summary rather than escalating
         top = analysis.top_hypothesis
@@ -99,6 +103,11 @@ async def synthesizer_node(state: InvestigationState) -> dict:
             f"(confidence {top.confidence_pct:.0f}%). "
             f"Recommended action ({top.authority_level}): {top.recommended_action}."
         )
+
+    updated_budget = budget.model_copy(update={
+        "input_tokens_used": budget.input_tokens_used + in_tok,
+        "output_tokens_used": budget.output_tokens_used + out_tok,
+    })
 
     decision = state.get("planner_decision")
     investigation_incomplete = bool(decision and decision.investigation_incomplete)
@@ -131,4 +140,6 @@ async def synthesizer_node(state: InvestigationState) -> dict:
         "phase": "synthesizing",
         "timeline": [event],
         "completed_at": datetime.now(timezone.utc),
+        "budget": updated_budget,
+        "token_log": [node_usage("synthesizer", settings.gemini_model, in_tok, out_tok)],
     }

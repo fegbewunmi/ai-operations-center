@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db.session import AsyncSessionLocal
+from app.graph.llm_tracking import extract_usage, node_usage
 from app.graph.state import InvestigationState
 from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
@@ -98,13 +99,10 @@ async def generate_deployment_summary(
     investigation_query: str,
     incident_description: str,
     llm: Any = None,
-) -> str:
-    """
-    Ask Gemini to summarise deployment findings in relation to the incident.
-    Accepts an optional llm parameter so tests can inject a mock.
-    """
+) -> tuple[str, Any]:
+    """Returns (summary_text, raw_AIMessage | None) so callers can extract token usage."""
     if not deployments:
-        return "No deployments found in the search window."
+        return "No deployments found in the search window.", None
 
     if llm is None:
         llm = ChatGoogleGenerativeAI(
@@ -135,7 +133,7 @@ async def generate_deployment_summary(
         SystemMessage(content="You are a site reliability engineer analysing deployment history."),
         HumanMessage(content=prompt),
     ])
-    return response.content.strip()
+    return response.content.strip(), response
 
 
 @traced_node("deployment")
@@ -177,19 +175,27 @@ async def deployment_node(state: InvestigationState) -> dict:
     near = [r for r in records if 0 <= (r.minutes_before_onset or float("inf")) <= NEAR_ONSET_MINUTES]
     deployment_near_onset = len(near) > 0
     nearest_minutes = min((r.minutes_before_onset for r in near), default=None)
+    budget = state["budget"]
 
+    in_tok = out_tok = 0
     try:
-        summary = await generate_deployment_summary(
+        summary, llm_response = await generate_deployment_summary(
             deployments=records,
             investigation_query=query.investigation_query,
             incident_description=incident.description,
         )
+        in_tok, out_tok = extract_usage(llm_response)
     except Exception:
         if records:
             near_str = f" One deployment was {nearest_minutes:.0f} min before onset." if nearest_minutes is not None else ""
             summary = f"Found {len(records)} deployment(s).{near_str} LLM summary unavailable."
         else:
             summary = "No deployments found in the search window."
+
+    updated_budget = budget.model_copy(update={
+        "input_tokens_used": budget.input_tokens_used + in_tok,
+        "output_tokens_used": budget.output_tokens_used + out_tok,
+    })
 
     findings = DeploymentFindings(
         service=query.service_name,
@@ -217,4 +223,6 @@ async def deployment_node(state: InvestigationState) -> dict:
         "deployment_findings": [findings],
         "timeline": [event],
         "phase": "planning",
+        "budget": updated_budget,
+        "token_log": [node_usage("deployment", settings.gemini_model, in_tok, out_tok)],
     }

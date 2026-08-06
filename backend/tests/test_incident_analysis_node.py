@@ -7,10 +7,20 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from app.graph.nodes.incident_analysis import incident_analysis_node
 from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
 from app.shared.schemas.synthesis import AnalysisOutput, Hypothesis
+
+
+def _raw_response(parsed):
+    """Build the include_raw=True dict returned by with_structured_output."""
+    msg = AIMessage(
+        content="",
+        usage_metadata={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+    )
+    return {"raw": msg, "parsed": parsed, "parsing_error": None}
 
 
 def _make_hypothesis(confidence_pct: float = 88.0) -> Hypothesis:
@@ -79,7 +89,7 @@ def _make_state(
 async def test_produces_analysis_output(mock_llm_class):
     analysis = _make_analysis_output(confidence_pct=88.0)
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=analysis)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(analysis))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm
@@ -103,7 +113,7 @@ async def test_sets_phase_escalated_when_requires_escalation(mock_llm_class):
         escalation_reason="Max confidence only 25% — insufficient evidence",
     )
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=analysis)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(analysis))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm
@@ -136,7 +146,7 @@ async def test_escalates_on_llm_failure(mock_llm_class):
 async def test_timeline_contains_confidence_in_description(mock_llm_class):
     analysis = _make_analysis_output(confidence_pct=88.0)
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=analysis)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(analysis))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm
@@ -153,11 +163,11 @@ async def test_uses_structured_output_with_analysis_output_schema(mock_llm_class
     """Confirm the node calls with_structured_output(AnalysisOutput), not SynthesisOutput."""
     analysis = _make_analysis_output()
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=analysis)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(analysis))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm
 
     await incident_analysis_node(_make_state())
 
-    mock_llm.with_structured_output.assert_called_once_with(AnalysisOutput)
+    mock_llm.with_structured_output.assert_called_once_with(AnalysisOutput, include_raw=True)

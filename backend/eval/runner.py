@@ -183,6 +183,7 @@ async def run_fixture(fixture_path: Path) -> dict:
         "validation_result": None,
         "dispatched_actions": [],
         "pending_approvals": [],
+        "token_log": [],
         "started_at": datetime.now(timezone.utc),
         "completed_at": None,
         "escalation_reason": None,

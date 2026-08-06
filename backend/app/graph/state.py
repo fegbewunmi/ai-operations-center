@@ -2,6 +2,7 @@ import operator
 from datetime import datetime
 from typing import Annotated, Literal, TypedDict
 
+from app.graph.llm_tracking import NodeTokenUsage
 from app.shared.schemas.core import AgentError, TimelineEvent
 from app.shared.schemas.deployment import DeploymentFindings
 from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
@@ -40,6 +41,9 @@ class InvestigationState(TypedDict):
     # Response outputs
     dispatched_actions: Annotated[list[DispatchedAction], operator.add]
     pending_approvals: Annotated[list[PendingApproval], operator.add]
+
+    # Token and cost tracking — one entry per node per LLM call
+    token_log: Annotated[list[NodeTokenUsage], operator.add]
 
     # Metadata
     started_at: datetime

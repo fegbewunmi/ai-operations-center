@@ -8,11 +8,21 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from app.graph.nodes.planner import planner_node
 from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
 from app.shared.schemas.planner import DeploymentQuery, PlannerDecision
 from app.shared.schemas.core import TimeWindow
+
+
+def _raw_response(parsed):
+    """Build the include_raw=True dict returned by with_structured_output."""
+    msg = AIMessage(
+        content="",
+        usage_metadata={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+    )
+    return {"raw": msg, "parsed": parsed, "parsing_error": None}
 
 
 def _make_incident() -> IncidentTrigger:
@@ -111,7 +121,7 @@ async def test_invoke_decision_sets_investigating_phase(mock_llm_class, mock_top
         working_confidence=0.0,
     )
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=decision)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(decision))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm
@@ -135,7 +145,7 @@ async def test_synthesize_decision_sets_synthesizing_phase(mock_llm_class, mock_
         working_confidence=0.88,
     )
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=decision)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(decision))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm
@@ -159,7 +169,7 @@ async def test_escalate_decision_sets_escalated_phase(mock_llm_class, mock_topol
         working_confidence=0.0,
     )
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=decision)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(decision))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm
@@ -211,7 +221,7 @@ async def test_increments_budget_on_successful_decision(mock_llm_class, mock_top
         reason="Check deployment history",
     )
     mock_structured = MagicMock()
-    mock_structured.ainvoke = AsyncMock(return_value=decision)
+    mock_structured.ainvoke = AsyncMock(return_value=_raw_response(decision))
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured
     mock_llm_class.return_value = mock_llm

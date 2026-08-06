@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db.session import AsyncSessionLocal
+from app.graph.llm_tracking import extract_usage, node_usage
 from app.graph.state import InvestigationState
 from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
@@ -321,16 +322,20 @@ async def planner_node(state: InvestigationState) -> dict:
         model=settings.gemini_model,
         temperature=0.1,
     )
-    structured_llm = llm.with_structured_output(PlannerDecision)
+    structured_llm = llm.with_structured_output(PlannerDecision, include_raw=True)
 
     system = _SYSTEM_PROMPT.format(threshold=f"{budget.confidence_threshold:.0%}")
     user_msg = _build_user_message(state, topology)
 
+    raw_result: dict = {}
     try:
-        decision: PlannerDecision = await structured_llm.ainvoke([
+        raw_result = await structured_llm.ainvoke([
             ("system", system),
             ("human", user_msg),
         ])
+        if raw_result.get("parsing_error"):
+            raise ValueError(f"Structured output parse error: {raw_result['parsing_error']}")
+        decision: PlannerDecision = raw_result["parsed"]
     except Exception as exc:
         error_type = "llm_refusal" if "refused" in str(exc).lower() else "tool_failure"
         # Escalate rather than loop - returning without phase change would re-enter planner forever
@@ -353,10 +358,14 @@ async def planner_node(state: InvestigationState) -> dict:
             ),
         }
 
+    in_tok, out_tok = extract_usage(raw_result)
+
     # Increment budget counters
     updated_budget = budget.model_copy(update={
         "iterations_used": budget.iterations_used + 1,
         "tool_calls_used": budget.tool_calls_used + 1,
+        "input_tokens_used": budget.input_tokens_used + in_tok,
+        "output_tokens_used": budget.output_tokens_used + out_tok,
     })
 
     phase_map = {"invoke": "investigating", "synthesize": "synthesizing", "escalate": "escalated"}
@@ -376,6 +385,7 @@ async def planner_node(state: InvestigationState) -> dict:
         "budget": updated_budget,
         "phase": phase_map[decision.action],
         "timeline": [event],
+        "token_log": [node_usage("planner", settings.gemini_model, in_tok, out_tok)],
     }
 
     # Only set topology on state once (first iteration)
