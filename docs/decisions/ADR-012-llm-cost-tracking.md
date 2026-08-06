@@ -171,6 +171,44 @@ The `budget_tokens_used` DB column is left in place and will continue to read 0.
 
 ---
 
+## Calculation Walkthrough
+
+The cost formula is a single expression in `llm_cost_usd`:
+
+```python
+cost = (input_tokens * 0.075e-6) + (output_tokens * 0.30e-6)
+```
+
+The constants are Gemini 2.5 Flash Vertex AI pricing expressed per-token:
+- `0.075e-6` = $0.075 ÷ 1,000,000 = $0.000000075 per input token
+- `0.30e-6`  = $0.30  ÷ 1,000,000 = $0.000000300 per output token
+
+Applied to INC-FD-001's actual counts (7,561 input / 9,690 output):
+
+```
+(7,561 × 0.000000075) + (9,690 × 0.000000300)
+= $0.000567            + $0.002907
+= $0.003474  ≈ $0.0035
+```
+
+The three-fixture baseline run (August 6, 2026):
+
+| Incident  | Input tokens | Output tokens | Cost     |
+|-----------|-------------|---------------|----------|
+| INC-FD-001 | 7,561      | 9,690         | $0.0035  |
+| INC-LR-001 | 7,170      | 10,007        | $0.0035  |
+| INC-RL-001 | 7,653      | 12,574        | $0.0043  |
+| **Total**  | **22,384** | **32,271**    | **$0.0114** |
+
+Output tokens outpace input by ~1.4× because the synthesizer and incident analysis nodes
+generate dense structured output (hypotheses, evidence lists, confidence scores). This is
+why tracking input and output separately matters: the 4× output pricing asymmetry means
+`total_tokens` alone would undercount actual cost by roughly 30%.
+
+At ~$0.004–0.011 per investigation, 10,000 investigations/month costs approximately $40–110.
+
+---
+
 ## Files to Change
 
 | File | Change |
