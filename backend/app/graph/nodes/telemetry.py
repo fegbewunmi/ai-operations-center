@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
 from app.shared.schemas.planner import TelemetryQuery
 from app.shared.schemas.telemetry import MetricPoint, TelemetryFindings
@@ -153,6 +154,7 @@ async def _generate_telemetry_summary(
     return response.content.strip()
 
 
+@traced_node("telemetry")
 async def telemetry_node(state: InvestigationState) -> dict:
     """
     Queries Cloud Monitoring metrics for the service and time window specified by the Planner.

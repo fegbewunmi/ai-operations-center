@@ -12,6 +12,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import settings
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
 from app.shared.schemas.synthesis import AnalysisOutput, Hypothesis
 
@@ -113,6 +114,7 @@ def _build_evidence_block(state: InvestigationState) -> str:
     return "\n".join(parts)
 
 
+@traced_node("incident_analysis")
 async def incident_analysis_node(state: InvestigationState) -> dict:
     """
     Correlates all evidence into ranked root-cause hypotheses.

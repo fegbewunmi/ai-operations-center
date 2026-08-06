@@ -41,3 +41,4 @@ class PlannerDecision(BaseModel):
     reason: str  # always populated - primary debugging artifact
     working_hypothesis: str | None = None
     working_confidence: float = 0.0
+    investigation_incomplete: bool = False  # True when synthesizing before confidence threshold

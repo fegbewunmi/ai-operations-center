@@ -2,10 +2,12 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import TimelineEvent
 from app.shared.schemas.validation import ValidationResult
 
 
+@traced_node("safety_guard")
 async def safety_guard_node(state: InvestigationState) -> dict:
     """
     Validates the Synthesizer's output before any action is dispatched.

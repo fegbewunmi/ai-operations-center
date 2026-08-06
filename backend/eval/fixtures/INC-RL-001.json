@@ -1,0 +1,116 @@
+{
+  "_comment": "INC-RL-001: Resource leak / exhaustion (inventory, easy). Pub/Sub consumer introduced a DB session leak 4h before failures. Connection count grows slowly. Misleading timeout errors at failure time.",
+  "incident": {
+    "incident_id": "INC-RL-001",
+    "alert_name": "InventoryServiceErrors",
+    "severity": "P2",
+    "service_name": "inventory",
+    "onset_timestamp": "2026-08-08T12:22:00Z",
+    "description": "Inventory service throwing errors: 23% of stock reservation requests failing. Error messages indicate timeout and payload size issues. Service was healthy 30 minutes ago."
+  },
+  "telemetry_fixture": {
+    "inventory": [
+      {"name": "request_count",       "value": 890,  "unit": "1/min", "timestamp": "2026-08-08T08:00:00+00:00", "is_anomalous": false, "baseline_value": 900},
+      {"name": "request_count",       "value": 895,  "unit": "1/min", "timestamp": "2026-08-08T10:00:00+00:00", "is_anomalous": false, "baseline_value": 900},
+      {"name": "request_count",       "value": 880,  "unit": "1/min", "timestamp": "2026-08-08T12:00:00+00:00", "is_anomalous": false, "baseline_value": 900},
+      {"name": "request_latencies",   "value": 95,   "unit": "ms",   "timestamp": "2026-08-08T08:00:00+00:00", "is_anomalous": false, "baseline_value": 90},
+      {"name": "request_latencies",   "value": 102,  "unit": "ms",   "timestamp": "2026-08-08T10:00:00+00:00", "is_anomalous": false, "baseline_value": 90},
+      {"name": "request_latencies",   "value": 118,  "unit": "ms",   "timestamp": "2026-08-08T12:00:00+00:00", "is_anomalous": false, "baseline_value": 90},
+      {"name": "error_count",         "value": 4,    "unit": "1/min", "timestamp": "2026-08-08T08:00:00+00:00", "is_anomalous": false, "baseline_value": 5},
+      {"name": "error_count",         "value": 9,    "unit": "1/min", "timestamp": "2026-08-08T10:00:00+00:00", "is_anomalous": false, "baseline_value": 5},
+      {"name": "error_count",         "value": 205,  "unit": "1/min", "timestamp": "2026-08-08T12:22:00+00:00", "is_anomalous": true,  "baseline_value": 5},
+      {"name": "cpu_utilization",     "value": 0.28, "unit": "fraction", "timestamp": "2026-08-08T12:22:00+00:00", "is_anomalous": false, "baseline_value": 0.25},
+      {"name": "memory_utilization",  "value": 0.61, "unit": "fraction", "timestamp": "2026-08-08T12:22:00+00:00", "is_anomalous": true,  "baseline_value": 0.48},
+      {"name": "db_connection_count", "value": 12,   "unit": "connections", "timestamp": "2026-08-08T08:00:00+00:00", "is_anomalous": false, "baseline_value": 12},
+      {"name": "db_connection_count", "value": 34,   "unit": "connections", "timestamp": "2026-08-08T09:30:00+00:00", "is_anomalous": false, "baseline_value": 12},
+      {"name": "db_connection_count", "value": 68,   "unit": "connections", "timestamp": "2026-08-08T11:00:00+00:00", "is_anomalous": true,  "baseline_value": 12},
+      {"name": "db_connection_count", "value": 96,   "unit": "connections", "timestamp": "2026-08-08T12:15:00+00:00", "is_anomalous": true,  "baseline_value": 12},
+      {"name": "db_connection_count", "value": 100,  "unit": "connections", "timestamp": "2026-08-08T12:22:00+00:00", "is_anomalous": true,  "baseline_value": 12}
+    ]
+  },
+  "deployment_fixture": {
+    "inventory": [
+      {
+        "deployment_id": "dep-inventory-v142",
+        "service": "inventory",
+        "version_from": "v1.4.1",
+        "version_to": "v1.4.2",
+        "deployed_at": "2026-08-08T08:02:00+00:00",
+        "deployed_by": "ci-cd-pipeline@orion-commerce.iam.gserviceaccount.com",
+        "status": "success",
+        "config_changes": [
+          "New Pub/Sub consumer: batch processing mode (processes 10 msgs at once)",
+          "Reduced DB query timeout from 30s to 10s"
+        ],
+        "rollback_available": true,
+        "rollback_target_version": "v1.4.1",
+        "git_commit_sha": "f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4",
+        "minutes_before_onset": 260.0
+      },
+      {
+        "deployment_id": "dep-inventory-v141",
+        "service": "inventory",
+        "version_from": "v1.4.0",
+        "version_to": "v1.4.1",
+        "deployed_at": "2026-08-03T09:00:00+00:00",
+        "deployed_by": "emma@orion-commerce.com",
+        "status": "success",
+        "config_changes": ["Added stock level caching (Redis TTL: 60s)"],
+        "rollback_available": true,
+        "rollback_target_version": "v1.4.0",
+        "git_commit_sha": "a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5",
+        "minutes_before_onset": 7402.0
+      }
+    ]
+  },
+  "knowledge_fixture": {
+    "documents": [
+      {
+        "document_id": "doc-inventory-leak-runbook",
+        "document_type": "runbook",
+        "title": "Inventory Service - Connection Leak Runbook",
+        "excerpt": "Resource leaks have time-delayed causality. The failure mode (connection exhaustion) begins hours after the root cause (unclosed DB session in code). The metric to watch is the TREND of connection count, not its value. Common Root Cause: Pub/Sub Consumer Missing Session Cleanup.",
+        "relevance_score": 0.95
+      },
+      {
+        "document_id": "doc-inventory-postmortem",
+        "document_type": "postmortem",
+        "title": "Inventory Service - Connection Exhaustion Postmortem",
+        "excerpt": "Connection count grew from 12 to 96 over 4 hours after v1.4.2 deployment (new Pub/Sub batch consumer). Error messages at failure time mentioned payload size — misleading. Root cause: DB session not closed on exception in batch consumer.",
+        "relevance_score": 0.93
+      },
+      {
+        "document_id": "doc-inventory-arch",
+        "document_type": "architecture_doc",
+        "title": "Inventory Service - Architecture Overview",
+        "excerpt": "Connection Pool: pool_size 10 per instance, max 100 connections shared. Known Risk: Pub/Sub Consumer Sessions — always use async with AsyncSessionLocal() as db.",
+        "relevance_score": 0.87
+      }
+    ],
+    "ownership": {
+      "service": "inventory",
+      "team": "Commerce",
+      "slack_channel": "#commerce-oncall",
+      "pagerduty_rotation": "commerce-rotation",
+      "runbook_url": "runbooks/inventory.md",
+      "oncall_contact": null
+    }
+  },
+  "topology_fixture": {
+    "dependencies": [],
+    "dependents": ["orders"],
+    "dependency_types": {
+      "orders": "asynchronous"
+    },
+    "critical_path": ["inventory"],
+    "blast_radius": []
+  },
+  "ground_truth": {
+    "root_cause_category": "resource",
+    "affected_service": "inventory",
+    "required_specialist_calls": ["telemetry", "deployment", "knowledge"],
+    "expected_authority_level": "L2",
+    "expected_min_confidence": 75,
+    "notes": "DB connection count grows linearly from deployment at 08:02 UTC to exhaustion at 12:22 UTC (4h 20m). The deployment is 260 min before onset — outside the 30min window — so the planner must reason about the trend, not just the timing. Knowledge agent should surface the resource leak postmortem."
+  }
+}

@@ -9,6 +9,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
 from app.shared.schemas.knowledge import KnowledgeContext, KnowledgeResult, ServiceOwnership
 from app.shared.schemas.planner import KnowledgeQuery
@@ -193,6 +194,7 @@ async def _generate_knowledge_summary(
     return response.content.strip()
 
 
+@traced_node("knowledge")
 async def knowledge_node(state: InvestigationState) -> dict:
     """
     Retrieves relevant runbooks, postmortems, and architecture docs via pgvector.

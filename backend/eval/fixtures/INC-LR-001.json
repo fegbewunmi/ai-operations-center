@@ -1,0 +1,98 @@
+{
+  "_comment": "INC-LR-001: Latency regression (orders, easy). DB schema migration dropped an index; p99 latency climbs gradually. No deployment in the window, no error exceptions initially.",
+  "incident": {
+    "incident_id": "INC-LR-001",
+    "alert_name": "HighLatency",
+    "severity": "P2",
+    "service_name": "orders",
+    "onset_timestamp": "2026-08-07T11:00:00Z",
+    "description": "Orders service p99 latency climbed from 200ms to 3200ms over 40 minutes. No error rate increase. Downstream API Gateway callers are timing out."
+  },
+  "telemetry_fixture": {
+    "orders": [
+      {"name": "request_count",   "value": 2800, "unit": "1/min", "timestamp": "2026-08-07T10:20:00+00:00", "is_anomalous": false, "baseline_value": 2900},
+      {"name": "request_count",   "value": 2750, "unit": "1/min", "timestamp": "2026-08-07T10:40:00+00:00", "is_anomalous": false, "baseline_value": 2900},
+      {"name": "request_count",   "value": 2600, "unit": "1/min", "timestamp": "2026-08-07T11:00:00+00:00", "is_anomalous": false, "baseline_value": 2900},
+      {"name": "request_latencies", "value": 195,  "unit": "ms", "timestamp": "2026-08-07T10:20:00+00:00", "is_anomalous": false, "baseline_value": 200},
+      {"name": "request_latencies", "value": 820,  "unit": "ms", "timestamp": "2026-08-07T10:35:00+00:00", "is_anomalous": true,  "baseline_value": 200},
+      {"name": "request_latencies", "value": 1900, "unit": "ms", "timestamp": "2026-08-07T10:50:00+00:00", "is_anomalous": true,  "baseline_value": 200},
+      {"name": "request_latencies", "value": 3200, "unit": "ms", "timestamp": "2026-08-07T11:00:00+00:00", "is_anomalous": true,  "baseline_value": 200},
+      {"name": "error_count",     "value": 12,   "unit": "1/min", "timestamp": "2026-08-07T10:20:00+00:00", "is_anomalous": false, "baseline_value": 14},
+      {"name": "error_count",     "value": 18,   "unit": "1/min", "timestamp": "2026-08-07T10:50:00+00:00", "is_anomalous": false, "baseline_value": 14},
+      {"name": "error_count",     "value": 210,  "unit": "1/min", "timestamp": "2026-08-07T11:00:00+00:00", "is_anomalous": true,  "baseline_value": 14},
+      {"name": "cpu_utilization", "value": 0.38, "unit": "fraction", "timestamp": "2026-08-07T11:00:00+00:00", "is_anomalous": false, "baseline_value": 0.35},
+      {"name": "memory_utilization", "value": 0.52, "unit": "fraction", "timestamp": "2026-08-07T11:00:00+00:00", "is_anomalous": false, "baseline_value": 0.50}
+    ]
+  },
+  "deployment_fixture": {
+    "orders": [
+      {
+        "deployment_id": "dep-orders-v315",
+        "service": "orders",
+        "version_from": "v3.1.4",
+        "version_to": "v3.1.5",
+        "deployed_at": "2026-08-05T14:00:00+00:00",
+        "deployed_by": "carol@orion-commerce.com",
+        "status": "success",
+        "config_changes": ["Updated logging format for structured JSON"],
+        "rollback_available": true,
+        "rollback_target_version": "v3.1.4",
+        "git_commit_sha": "d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2",
+        "minutes_before_onset": 2940.0
+      }
+    ]
+  },
+  "knowledge_fixture": {
+    "documents": [
+      {
+        "document_id": "doc-orders-latency-runbook",
+        "document_type": "runbook",
+        "title": "Orders Service - High Latency Runbook",
+        "excerpt": "Common Root Causes: 1. Slow Database Query (most common for gradual degradation) - Check Cloud Monitoring: Cloud SQL > query latency by statement. Look for queries without index using Cloud SQL insights. Common culprit: table scan on large orders table after a schema change.",
+        "relevance_score": 0.94
+      },
+      {
+        "document_id": "doc-orders-postmortem",
+        "document_type": "postmortem",
+        "title": "Orders Service - Database Slow Query Postmortem",
+        "excerpt": "Root cause: Migration 0021 dropped an index on orders.customer_id marked as unused. Latency climbed from 180ms to 3400ms over 40 minutes. No error rate increase initially. Gradual degradation — no step change. CPU normal throughout.",
+        "relevance_score": 0.91
+      },
+      {
+        "document_id": "doc-orders-arch",
+        "document_type": "architecture_doc",
+        "title": "Orders Service - Architecture Overview",
+        "excerpt": "Critical Queries: Checkout flow uses SELECT with JOIN on orders.customer_id. Indexes (critical — do not remove without load testing): orders.customer_id — used in checkout join queries.",
+        "relevance_score": 0.85
+      }
+    ],
+    "ownership": {
+      "service": "orders",
+      "team": "Commerce",
+      "slack_channel": "#commerce-oncall",
+      "pagerduty_rotation": "commerce-rotation",
+      "runbook_url": "runbooks/orders.md",
+      "oncall_contact": null
+    }
+  },
+  "topology_fixture": {
+    "dependencies": ["payments", "inventory", "notifications"],
+    "dependents": ["api-gateway"],
+    "dependency_types": {
+      "payments": "synchronous",
+      "inventory": "asynchronous",
+      "notifications": "asynchronous",
+      "api-gateway": "synchronous"
+    },
+    "critical_path": ["api-gateway", "orders"],
+    "blast_radius": ["api-gateway"]
+  },
+  "ground_truth": {
+    "root_cause_category": "configuration",
+    "affected_service": "orders",
+    "required_specialist_calls": ["telemetry", "knowledge"],
+    "expected_authority_level": "L2",
+    "expected_min_confidence": 75,
+    "notes": "No deployment near onset. Gradual p99 latency increase with normal CPU/memory points to DB query regression. Schema migration (not tracked as deployment) dropped an index. Knowledge agent should surface the postmortem pattern."
+  }
+}

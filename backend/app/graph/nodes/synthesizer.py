@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
 from app.shared.schemas.synthesis import SynthesisOutput
 
@@ -57,6 +58,7 @@ def _hypothesis_block(state: InvestigationState) -> str:
     return "\n".join(parts)
 
 
+@traced_node("synthesizer")
 async def synthesizer_node(state: InvestigationState) -> dict:
     """
     Reads analysis_output (hypotheses) from state and writes a human-readable
@@ -99,6 +101,9 @@ async def synthesizer_node(state: InvestigationState) -> dict:
             f"Recommended action ({top.authority_level}): {top.recommended_action}."
         )
 
+    decision = state.get("planner_decision")
+    investigation_incomplete = bool(decision and decision.investigation_incomplete)
+
     synthesis = SynthesisOutput(
         incident_id=incident.incident_id,
         investigation_summary=summary,
@@ -106,7 +111,7 @@ async def synthesizer_node(state: InvestigationState) -> dict:
         top_hypothesis=analysis.top_hypothesis,
         requires_escalation=analysis.requires_escalation,
         escalation_reason=analysis.escalation_reason,
-        investigation_incomplete=False,
+        investigation_incomplete=investigation_incomplete,
     )
 
     event = TimelineEvent(

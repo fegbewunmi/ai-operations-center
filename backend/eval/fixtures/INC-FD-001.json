@@ -1,0 +1,108 @@
+{
+  "_comment": "INC-FD-001: Failed deployment (payments, easy). Payments v2.3.1 deployed 15 min before onset. Clear signal: error spike correlated with deployment.",
+  "incident": {
+    "incident_id": "INC-FD-001",
+    "alert_name": "HighErrorRate",
+    "severity": "P1",
+    "service_name": "payments",
+    "onset_timestamp": "2026-08-06T06:00:00Z",
+    "description": "Payments service error rate elevated to 45% at 06:00 UTC. Baseline is 0.3%. Alert: HighErrorRate."
+  },
+  "telemetry_fixture": {
+    "payments": [
+      {"name": "request_count", "value": 1240, "unit": "1/min", "timestamp": "2026-08-06T05:50:00+00:00", "is_anomalous": false, "baseline_value": 1200},
+      {"name": "request_count", "value": 1230, "unit": "1/min", "timestamp": "2026-08-06T05:55:00+00:00", "is_anomalous": false, "baseline_value": 1200},
+      {"name": "request_count", "value": 1190, "unit": "1/min", "timestamp": "2026-08-06T06:00:00+00:00", "is_anomalous": false, "baseline_value": 1200},
+      {"name": "request_latencies", "value": 185, "unit": "ms", "timestamp": "2026-08-06T05:50:00+00:00", "is_anomalous": false, "baseline_value": 180},
+      {"name": "request_latencies", "value": 1450, "unit": "ms", "timestamp": "2026-08-06T05:58:00+00:00", "is_anomalous": true, "baseline_value": 180},
+      {"name": "request_latencies", "value": 2890, "unit": "ms", "timestamp": "2026-08-06T06:00:00+00:00", "is_anomalous": true, "baseline_value": 180},
+      {"name": "error_count", "value": 3, "unit": "1/min", "timestamp": "2026-08-06T05:50:00+00:00", "is_anomalous": false, "baseline_value": 4},
+      {"name": "error_count", "value": 287, "unit": "1/min", "timestamp": "2026-08-06T05:58:00+00:00", "is_anomalous": true, "baseline_value": 4},
+      {"name": "error_count", "value": 534, "unit": "1/min", "timestamp": "2026-08-06T06:00:00+00:00", "is_anomalous": true, "baseline_value": 4},
+      {"name": "cpu_utilization", "value": 0.42, "unit": "fraction", "timestamp": "2026-08-06T06:00:00+00:00", "is_anomalous": false, "baseline_value": 0.40},
+      {"name": "memory_utilization", "value": 0.51, "unit": "fraction", "timestamp": "2026-08-06T06:00:00+00:00", "is_anomalous": false, "baseline_value": 0.50}
+    ]
+  },
+  "deployment_fixture": {
+    "payments": [
+      {
+        "deployment_id": "dep-payments-v231",
+        "service": "payments",
+        "version_from": "v2.3.0",
+        "version_to": "v2.3.1",
+        "deployed_at": "2026-08-06T05:45:00+00:00",
+        "deployed_by": "ci-cd-pipeline@orion-commerce.iam.gserviceaccount.com",
+        "status": "success",
+        "config_changes": [
+          "Updated DB_POOL_SIZE from 10 to 15",
+          "Upgraded stripe-python from 7.1.0 to 7.2.0",
+          "Added connection retry logic with exponential backoff"
+        ],
+        "rollback_available": true,
+        "rollback_target_version": "v2.3.0",
+        "git_commit_sha": "a3f8c2d1e4b5f6a7b8c9d0e1f2a3b4c5d6e7f8a9",
+        "minutes_before_onset": 15.0
+      },
+      {
+        "deployment_id": "dep-payments-v230",
+        "service": "payments",
+        "version_from": "v2.2.9",
+        "version_to": "v2.3.0",
+        "deployed_at": "2026-08-03T10:00:00+00:00",
+        "deployed_by": "alice@orion-commerce.com",
+        "status": "success",
+        "config_changes": ["Added metrics endpoint /metrics for Prometheus scraping"],
+        "rollback_available": true,
+        "rollback_target_version": "v2.2.9",
+        "git_commit_sha": "b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0",
+        "minutes_before_onset": 4320.0
+      }
+    ]
+  },
+  "knowledge_fixture": {
+    "documents": [
+      {
+        "document_id": "doc-payments-runbook",
+        "document_type": "runbook",
+        "title": "Payment Service - High Error Rate Runbook",
+        "excerpt": "Common Root Causes: 1. Failed Deployment (most common) - Look for a deployment within 30 minutes of incident onset. Rollback command: gcloud run services update-traffic payments --to-revisions=<prev>=100. Estimated resolution: 5 minutes.",
+        "relevance_score": 0.92
+      },
+      {
+        "document_id": "doc-payments-postmortem",
+        "document_type": "postmortem",
+        "title": "Payment Service v2.2.0 Outage - Postmortem",
+        "excerpt": "Root cause: a dependency version bump introduced an incompatible change to the Stripe SDK that caused all payment attempts to fail with a serialization error. Pattern: v2.2.0 deployment at 05:40 UTC caused 87% error rate from 05:43 UTC.",
+        "relevance_score": 0.88
+      }
+    ],
+    "ownership": {
+      "service": "payments",
+      "team": "Payments",
+      "slack_channel": "#payments-oncall",
+      "pagerduty_rotation": "payments-rotation",
+      "runbook_url": "runbooks/payments.md",
+      "oncall_contact": null
+    }
+  },
+  "topology_fixture": {
+    "dependencies": ["stripe-gateway", "fraud-detection"],
+    "dependents": ["orders", "api-gateway"],
+    "dependency_types": {
+      "stripe-gateway": "synchronous",
+      "fraud-detection": "synchronous",
+      "orders": "synchronous",
+      "api-gateway": "synchronous"
+    },
+    "critical_path": ["orders", "api-gateway", "payments"],
+    "blast_radius": ["orders", "api-gateway"]
+  },
+  "ground_truth": {
+    "root_cause_category": "deployment",
+    "affected_service": "payments",
+    "required_specialist_calls": ["deployment", "telemetry"],
+    "expected_authority_level": "L2",
+    "expected_min_confidence": 85,
+    "notes": "v2.3.1 deployed 15 min before onset with Stripe SDK upgrade. Error spike starts at deployment time."
+  }
+}

@@ -264,19 +264,343 @@ at which point 100% of payment attempts fail until the breaker resets.
 - Ongoing work to make fraud check asynchronous (post-payment, with reversal on fraud detection)
 """,
     },
+    # ── Orders service documents (latency regression family) ──────────────────
+    {
+        "title": "Orders Service - High Latency Runbook",
+        "document_type": "runbook",
+        "service_name": "orders",
+        "content": """# Orders Service High Latency Runbook
+
+## Symptoms
+- Orders p99 latency exceeds 2000ms (baseline: 200ms)
+- Downstream timeouts in API Gateway or upstream callers
+- CPU normal, no exception errors — pure latency
+
+## Immediate Triage (first 5 minutes)
+1. Check Payments service latency — Orders calls Payments synchronously on every checkout
+2. Check Cloud SQL query latency for the orders database
+3. Check for recent deployments: `gcloud run revisions list --service orders`
+4. Verify Inventory and Notifications queue depth (async — not a blocker)
+
+## Common Root Causes
+
+### 1. Slow Database Query (most common for gradual degradation)
+- Check Cloud Monitoring: Cloud SQL > query latency by statement
+- Look for queries without index using Cloud SQL insights
+- Common culprit: table scan on large orders table after a schema change
+- Fix: `EXPLAIN ANALYZE` the slow query, add index or revert migration
+- Command: `gcloud sql operations list --instance ai-ops-db --filter="status=RUNNING"`
+
+### 2. Payments Dependency Timeout
+- Orders calls Payments synchronously; if Payments slows down, Orders times out
+- Check Payments p99 latency in Cloud Monitoring
+- If Payments is slow: investigate Payments service separately
+- Orders circuit breaker: opens after 10 consecutive timeouts (30s cooldown)
+
+### 3. N+1 Query Pattern After Deployment
+- A code change introduced a loop calling DB once per order item
+- Symptom: latency proportional to order size, not request count
+- Fix: rollback the deployment that introduced the N+1 pattern
+- Check: query count per request in Cloud SQL insights
+
+## Escalation
+- L2: #commerce-oncall Slack channel
+- L3: Page on-call engineer via PagerDuty rotation "commerce-rotation"
+""",
+    },
+    {
+        "title": "Orders Service - Database Slow Query Postmortem",
+        "document_type": "postmortem",
+        "service_name": "orders",
+        "content": """# Postmortem: Orders Latency Spike - 2026-05-22
+
+## Summary
+Orders service p99 latency climbed from 180ms to 3400ms over 40 minutes following
+a schema migration that removed an index on the orders.customer_id column.
+No error rate increase — only latency. Downstream services (API Gateway) began
+timing out 25 minutes into the incident.
+
+## Impact
+- Duration: 67 minutes (11:00 - 12:07 UTC)
+- Latency p99: 3400ms (from baseline 180ms)
+- Error rate: 0% initially, then 8% as timeouts began cascading
+- Affected users: ~12,000 requests timed out or saw >3s response times
+
+## Timeline
+- 10:55 UTC: Migration 0021 applied to Cloud SQL (removes unused index)
+- 11:00 UTC: p99 latency begins climbing (gradual — no step change)
+- 11:22 UTC: Latency alert fires (threshold: p99 > 1500ms for 5 minutes)
+- 11:25 UTC: On-call engineer begins investigation
+- 11:38 UTC: Root cause identified (slow table scan on orders.customer_id)
+- 11:44 UTC: Hotfix migration 0022 applied (adds index back)
+- 12:07 UTC: Latency returns to baseline
+
+## Root Cause
+Migration 0021 dropped an index on orders.customer_id marked as "unused"
+by an automated analysis. In production the column is used by a join query
+in the checkout flow — the automated analysis was run against a staging replica
+with 1/100th the data volume, where the planner chose a different execution plan.
+
+## What was misleading
+- No exceptions in logs — pure latency degradation
+- CPU normal throughout — not a resource exhaustion issue
+- Alert was delayed 22 minutes (gradual degradation)
+- No deployment near the incident window — it was a migration (separate CI job)
+
+## Action Items
+1. Treat Cloud SQL migrations as deployments in the deployment tracking system (P1)
+2. Never automatically drop indexes — require manual approval (P1)
+3. Add index-dependent query latency to pre-migration canary checks (P2)
+4. Lower p99 alert threshold to 800ms for the orders service (P2)
+
+## Lessons Learned
+- Gradual latency degradation is harder to catch than step-change error rate spikes
+- Schema migrations are deployments; they belong in deployment history
+- "Unused" by the query planner in staging ≠ unused in production at scale
+""",
+    },
+    {
+        "title": "Orders Service - Architecture Overview",
+        "document_type": "architecture_doc",
+        "service_name": "orders",
+        "content": """# Orders Service Architecture
+
+## Overview
+The orders service manages the full order lifecycle for Orion Commerce:
+creation, payment processing coordination, inventory reservation, and notifications.
+It is a Commerce Team P0 service with a 99.9% uptime SLO.
+
+## Synchronous Dependencies (failure cascades to orders)
+- **payments**: Called on every checkout. If Payments is slow or down, orders fail.
+  Timeout: 5s. Circuit breaker: 10 failures in 60s. SLA: p99 < 500ms.
+- **Cloud SQL (ai-ops-db)**: Primary orders datastore. Key tables:
+  orders, order_items, customers. Read replica used for reporting.
+  Connection pool: 15 connections per instance.
+
+## Asynchronous Dependencies (non-blocking)
+- **inventory**: Stock reservation via Cloud Pub/Sub. Orders succeed even if
+  inventory is slow — eventual consistency model. Max retry: 3 times.
+- **notifications**: Order confirmation via Cloud Pub/Sub. Failure does not
+  affect order success. Dead-letter queue for failures.
+
+## Critical Queries
+- Order creation: INSERT into orders + order_items (uses transaction)
+- Checkout flow: SELECT with JOIN on orders.customer_id + orders.status
+- Order history: paginated SELECT with ORDER BY created_at DESC
+
+## Indexes (critical — do not remove without load testing)
+- orders.customer_id — used in checkout join queries
+- orders.status — used in order history pagination
+- orders.created_at — used in reporting and timeline queries
+- order_items.order_id — used in item retrieval join
+
+## Deployment
+- Runtime: Cloud Run (us-central1), min-instances: 3, max-instances: 30
+- Container: python:3.11-slim, 1GB RAM, 2 vCPU
+- Rollback: Traffic splitting via `gcloud run services update-traffic`
+- DB migrations: Alembic, applied separately from service deployments
+
+## SLOs
+- Availability: 99.9% (43 minutes downtime budget per month)
+- Latency p99: < 500ms
+- Error rate: < 0.5%
+""",
+    },
+
+    # ── Inventory service documents (resource leak / exhaustion family) ────────
+    {
+        "title": "Inventory Service - Connection Leak Runbook",
+        "document_type": "runbook",
+        "service_name": "inventory",
+        "content": """# Inventory Service - Resource Leak Runbook
+
+## Symptoms
+- Service is initially healthy; failures begin under sustained traffic hours later
+- Cloud SQL "Active connections" metric growing over time (not correlated with request spikes)
+- Eventual errors: "remaining connection slots are reserved" or 503s
+- Logs may show misleading timeout errors before the underlying leak is apparent
+- Gradual memory growth correlated with connection count
+
+## Why It Is Hard to Detect
+Resource leaks have time-delayed causality. The failure mode (connection exhaustion)
+begins hours after the root cause (unclosed DB session in code). Short-window telemetry
+often looks normal; the metric to watch is the TREND of connection count, not its value.
+
+## Immediate Triage
+1. Check Cloud Monitoring: Cloud SQL > Active connections (trend over last 2-4 hours)
+2. Check if connection count is correlated with request rate or growing independently
+3. Restart inventory service to force connection pool reset (L2 action):
+   `gcloud run services update inventory --update-env-vars RESTART=1`
+4. After restart: confirm connection count drops and service recovers
+
+## Finding the Leak
+```sql
+-- Run on Cloud SQL to identify leaked connections
+SELECT application_name, state, count(*)
+FROM pg_stat_activity
+WHERE datname = 'ai_ops'
+GROUP BY application_name, state
+ORDER BY count DESC;
+```
+- Idle connections that accumulate: likely missing `db.close()` or improper context manager usage
+- "Idle in transaction" connections: missing `db.commit()` or `db.rollback()` in error handlers
+
+## Common Root Causes in Inventory Service
+### 1. Pub/Sub Consumer Missing Session Cleanup
+- The Pub/Sub consumer creates a DB session on each message
+- If processing raises an exception, the session context manager is bypassed
+- Fix: ensure all message handlers use `async with AsyncSessionLocal() as db:`
+- Never use bare `db = AsyncSessionLocal(); await db.execute(...)`
+
+### 2. Background Reconciliation Job Leak
+- Inventory runs hourly reconciliation as a background task
+- If the task crashes mid-execution, it may leave sessions open
+- Check: `ps aux` for orphaned reconciliation processes
+- Fix: add explicit session cleanup to the reconciliation job error handler
+
+## Long-Term Prevention
+- Set `pool_pre_ping=True` in SQLAlchemy engine to detect stale connections
+- Configure `pool_recycle=300` to close connections idle > 5 minutes
+- Add Cloud Monitoring alert: "Active connections > 70% of max for 10 minutes"
+
+## Escalation
+- L2: #commerce-oncall (restart service)
+- L3: Disable Pub/Sub consumer, enable maintenance mode (requires approval)
+""",
+    },
+    {
+        "title": "Inventory Service - Connection Exhaustion Postmortem",
+        "document_type": "postmortem",
+        "service_name": "inventory",
+        "content": """# Postmortem: Inventory Service Failures - 2026-06-10
+
+## Summary
+Inventory service began failing 4 hours and 20 minutes after a code change
+introduced a database session leak in the Pub/Sub message consumer.
+The failure appeared as "too many clients" errors from Cloud SQL. A restart
+resolved the immediate issue; a hotfix closed the session leak.
+
+## Impact
+- Gradual degradation over 4.5 hours, then hard failure
+- 23% of stock reservation requests failed at peak
+- No order loss (orders use async inventory — eventual consistency)
+- Duration of hard failure: 18 minutes until service restarted
+
+## Timeline
+- 08:00 UTC: Deployment of v1.4.2 (new Pub/Sub consumer batch processing)
+- 08:00–12:15 UTC: Connection count growing from 12 → 96 (max: 100)
+- 12:15 UTC: First "too many clients" errors appear
+- 12:22 UTC: Alert fires (error rate threshold)
+- 12:29 UTC: On-call investigates — sees error messages about payload size (misleading)
+- 12:35 UTC: Root cause identified (connection count trend in Cloud Monitoring)
+- 12:38 UTC: Service restarted, connections drop to 8
+- 13:10 UTC: Hotfix deployed closing DB session in batch consumer error handler
+
+## What Was Misleading
+- Initial error messages mentioned "payload too large" — a side effect, not the cause
+- The failure looked like a sudden spike but was a 4-hour gradual build
+- CPU and memory were normal until connections were exhausted
+- No deployment visible in the 30-minute window before failure — it was 4 hours earlier
+
+## Root Cause
+The v1.4.2 batch consumer created a DB session outside the message-processing
+context manager. When batch processing raised a validation error, the exception
+handler ran but the DB session was never closed:
+
+```python
+# BEFORE (buggy)
+db = AsyncSessionLocal()
+for msg in batch:
+    try:
+        await process(db, msg)
+    except ValidationError:
+        logger.error("Skipping invalid message")
+        # db session never closed here
+
+# AFTER (fixed)
+async with AsyncSessionLocal() as db:
+    for msg in batch:
+        try:
+            await process(db, msg)
+        except ValidationError:
+            logger.error("Skipping invalid message")
+            await db.rollback()  # explicit rollback, session closed by context manager
+```
+
+## Action Items
+1. Add linting rule to block bare AsyncSessionLocal() without context manager (P1)
+2. Add Cloud Monitoring alert: connections > 80% of max (P1)
+3. Add connection count to pre-deployment health checks (P2)
+4. Write unit test that verifies session is closed on exception in batch consumer (P1)
+
+## Lessons Learned
+- Resource leaks have time-delayed causality; look at metric TRENDS not current values
+- Error messages at failure time often describe symptoms, not root cause
+- The "suspicious deployment" heuristic needs a longer window (2+ hours) for leak patterns
+""",
+    },
+    {
+        "title": "Inventory Service - Architecture Overview",
+        "document_type": "architecture_doc",
+        "service_name": "inventory",
+        "content": """# Inventory Service Architecture
+
+## Overview
+The inventory service tracks stock levels for Orion Commerce with eventual consistency.
+It processes stock reservations asynchronously via Cloud Pub/Sub.
+Commerce Team P1 service with a 99.5% uptime SLO.
+
+## Data Flow
+- Orders → Cloud Pub/Sub (stock reservation request) → Inventory (consumer)
+- Inventory → Cloud Pub/Sub (stock confirmed/rejected) → Orders (consumer)
+
+## Components
+- **REST API**: Read-only stock queries from internal services
+- **Pub/Sub Consumer**: Processes stock reservation messages from Orders
+- **Reconciliation Job**: Hourly Cloud Scheduler job that reconciles DB with warehouse feed
+- **Cloud SQL**: inventory_items, reservations, stock_movements tables
+
+## Connection Pool Configuration
+- pool_size: 10 per Cloud Run instance
+- max_connections Cloud SQL: 100 (shared across all services)
+- Inventory allocation: ~20 connections maximum (2 instances × 10 pool_size)
+- pool_pre_ping: enabled
+- pool_recycle: 300 seconds
+
+## Known Risk: Pub/Sub Consumer Sessions
+The Pub/Sub consumer creates one DB session per message batch. If exception handling
+is not careful, sessions can leak. Always use:
+```python
+async with AsyncSessionLocal() as db:
+    # process message
+    await db.commit()
+```
+
+## Resource Limits
+- Cloud Run min-instances: 2, max-instances: 10
+- Memory: 512MB per instance
+- CPU: 1 vCPU per instance
+
+## SLOs
+- Availability: 99.5%
+- Stock reservation latency (end-to-end): < 5 seconds (async)
+- Reconciliation freshness: < 70 minutes
+""",
+    },
 ]
 
 
 # ---------------------------------------------------------------------------
-# Deployments: one suspicious, others benign
+# Deployments: one suspicious per service, others benign
 # ---------------------------------------------------------------------------
-def make_deployments(payments_id: str) -> list[dict]:
+def make_deployments(payments_id: str, orders_id: str, inventory_id: str) -> list[dict]:
     return [
+        # ── Payments: suspicious deployment 15 min before onset ──────────────
         {
             "service_id": payments_id,
             "version_from": "v2.3.0",
             "version_to": "v2.3.1",
-            "deployed_at": INCIDENT_ONSET - timedelta(minutes=15),  # 05:45 UTC - suspicious
+            "deployed_at": INCIDENT_ONSET - timedelta(minutes=15),
             "deployed_by": "ci-cd-pipeline@orion-commerce.iam.gserviceaccount.com",
             "status": "success",
             "config_changes": [
@@ -311,6 +635,63 @@ def make_deployments(payments_id: str) -> list[dict]:
             "rollback_available": False,
             "rollback_target_version": None,
             "git_commit_sha": "c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1",
+        },
+
+        # ── Orders: benign deployment history (NOT near incident onset) ───────
+        # Used by INC-LR-001 (latency regression) — deployment is NOT the cause
+        {
+            "service_id": orders_id,
+            "version_from": "v3.1.4",
+            "version_to": "v3.1.5",
+            "deployed_at": INCIDENT_ONSET - timedelta(days=2),
+            "deployed_by": "carol@orion-commerce.com",
+            "status": "success",
+            "config_changes": ["Updated logging format for structured JSON"],
+            "rollback_available": True,
+            "rollback_target_version": "v3.1.4",
+            "git_commit_sha": "d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2",
+        },
+        {
+            "service_id": orders_id,
+            "version_from": "v3.1.3",
+            "version_to": "v3.1.4",
+            "deployed_at": INCIDENT_ONSET - timedelta(days=8),
+            "deployed_by": "dave@orion-commerce.com",
+            "status": "success",
+            "config_changes": ["Improved pagination for order history endpoint"],
+            "rollback_available": True,
+            "rollback_target_version": "v3.1.3",
+            "git_commit_sha": "e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3",
+        },
+
+        # ── Inventory: deployment 4+ hours before onset (leak scenario) ───────
+        # Used by INC-RL-001 (resource leak) — the leak was introduced here
+        {
+            "service_id": inventory_id,
+            "version_from": "v1.4.1",
+            "version_to": "v1.4.2",
+            "deployed_at": INCIDENT_ONSET - timedelta(hours=4, minutes=20),
+            "deployed_by": "ci-cd-pipeline@orion-commerce.iam.gserviceaccount.com",
+            "status": "success",
+            "config_changes": [
+                "New Pub/Sub consumer: batch processing mode (processes 10 msgs at once)",
+                "Reduced DB query timeout from 30s to 10s",
+            ],
+            "rollback_available": True,
+            "rollback_target_version": "v1.4.1",
+            "git_commit_sha": "f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4",
+        },
+        {
+            "service_id": inventory_id,
+            "version_from": "v1.4.0",
+            "version_to": "v1.4.1",
+            "deployed_at": INCIDENT_ONSET - timedelta(days=5),
+            "deployed_by": "emma@orion-commerce.com",
+            "status": "success",
+            "config_changes": ["Added stock level caching (Redis TTL: 60s)"],
+            "rollback_available": True,
+            "rollback_target_version": "v1.4.0",
+            "git_commit_sha": "a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5",
         },
     ]
 
@@ -348,17 +729,23 @@ async def main() -> None:
     print("Connecting to Cloud SQL via proxy...")
     conn = await asyncpg.connect(DB_DSN)
 
-    print("Fetching payments service_id...")
-    row = await conn.fetchrow("SELECT service_id FROM services WHERE name = 'payments'")
-    if not row:
-        print("ERROR: 'payments' service not found. Run migrations first.")
-        sys.exit(1)
-    payments_id = str(row["service_id"])
-    print(f"  payments service_id: {payments_id}")
+    print("Fetching service IDs...")
+    service_ids: dict[str, str] = {}
+    for svc_name in ("payments", "orders", "inventory"):
+        row = await conn.fetchrow("SELECT service_id FROM services WHERE name = $1", svc_name)
+        if not row:
+            print(f"ERROR: '{svc_name}' service not found. Run migrations first.")
+            sys.exit(1)
+        service_ids[svc_name] = str(row["service_id"])
+        print(f"  {svc_name}: {service_ids[svc_name]}")
+
+    payments_id  = service_ids["payments"]
+    orders_id    = service_ids["orders"]
+    inventory_id = service_ids["inventory"]
 
     # --- Deployments ---
     print("\nInserting deployments...")
-    for dep in make_deployments(payments_id):
+    for dep in make_deployments(payments_id, orders_id, inventory_id):
         await conn.execute("""
             INSERT INTO deployments
               (service_id, version_from, version_to, deployed_at, deployed_by,

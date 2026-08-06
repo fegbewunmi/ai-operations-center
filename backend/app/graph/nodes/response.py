@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import TimelineEvent
 from app.shared.schemas.response import DispatchedAction, PendingApproval
 
@@ -154,6 +155,7 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
         )
 
 
+@traced_node("response")
 async def response_node(state: InvestigationState) -> dict:
     """
     Dispatches approved remediation actions and notifies stakeholders.

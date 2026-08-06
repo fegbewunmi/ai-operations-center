@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
 from app.shared.schemas.knowledge import ServiceNode, ServiceTopology
 from app.shared.schemas.planner import PlannerDecision
@@ -164,6 +165,16 @@ def _build_user_message(state: InvestigationState, topology: ServiceTopology | N
             "",
         ]
 
+    validation = state.get("validation_result")
+    if validation is not None and not validation.passed:
+        lines += [
+            "PREVIOUS SYNTHESIS FAILED SAFETY GUARD:",
+            f"  Issues: {'; '.join(validation.issues)}",
+            "  You must gather additional evidence to resolve these issues before synthesizing again.",
+            "  Do NOT synthesize again with the same confidence level.",
+            "",
+        ]
+
     lines += [
         "ACCUMULATED EVIDENCE:",
         _evidence_summary(state),
@@ -172,6 +183,7 @@ def _build_user_message(state: InvestigationState, topology: ServiceTopology | N
     return "\n".join(lines)
 
 
+@traced_node("planner")
 async def planner_node(state: InvestigationState) -> dict:
     """
     Controls the investigation loop.

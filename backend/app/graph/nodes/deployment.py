@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.graph.state import InvestigationState
+from app.graph.tracing import traced_node
 from app.shared.schemas.core import AgentError, TimelineEvent
 from app.shared.schemas.deployment import DeploymentFindings, DeploymentRecord
 from app.shared.schemas.planner import DeploymentQuery
@@ -138,6 +139,7 @@ async def generate_deployment_summary(
     return response.content.strip()
 
 
+@traced_node("deployment")
 async def deployment_node(state: InvestigationState) -> dict:
     """
     Queries deployment history for the service and time window specified by the Planner.
