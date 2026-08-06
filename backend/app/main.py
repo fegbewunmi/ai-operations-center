@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
     from app.graph import graph as graph_module
 
-    async with await AsyncPostgresSaver.from_conn_string(settings.database_url) as checkpointer:
+    async with AsyncPostgresSaver.from_conn_string(settings.database_url) as checkpointer:
         await checkpointer.setup()  # creates langgraph checkpoint tables if not present
         graph_module.investigation_graph = graph_module.build_graph(checkpointer=checkpointer)
         yield
