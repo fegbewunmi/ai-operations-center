@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # Vertex AI
     vertex_ai_location: str = "us-central1"
-    gemini_model: str = "gemini-2.0-flash-001"
+    gemini_model: str = "gemini-1.5-flash-002"
     embedding_model: str = "text-embedding-004"
 
     # Investigation budget defaults

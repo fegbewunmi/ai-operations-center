@@ -226,6 +226,7 @@ async def planner_node(state: InvestigationState) -> dict:
         ])
     except Exception as exc:
         error_type = "llm_refusal" if "refused" in str(exc).lower() else "tool_failure"
+        # Escalate rather than loop - returning without phase change would re-enter planner forever
         return {
             "error_log": [AgentError(
                 agent="planner",
@@ -234,7 +235,15 @@ async def planner_node(state: InvestigationState) -> dict:
                 message=str(exc),
                 timestamp=datetime.now(timezone.utc),
                 retries_attempted=0,
-            )]
+            )],
+            "phase": "escalated",
+            "escalation_reason": f"Planner LLM call failed: {exc}",
+            "planner_decision": PlannerDecision(
+                action="escalate",
+                reason=f"LLM unavailable: {exc}",
+                working_hypothesis=state.get("planner_working_hypothesis"),
+                working_confidence=state.get("planner_working_confidence", 0.0),
+            ),
         }
 
     # Increment budget counters
