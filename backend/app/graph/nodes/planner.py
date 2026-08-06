@@ -336,6 +336,11 @@ async def planner_node(state: InvestigationState) -> dict:
         if raw_result.get("parsing_error"):
             raise ValueError(f"Structured output parse error: {raw_result['parsing_error']}")
         decision: PlannerDecision = raw_result["parsed"]
+        if decision.action == "invoke" and decision.query is None:
+            raise ValueError(
+                f"Planner returned action='invoke' (agent={decision.agent}) with no query — "
+                "likely a union-type schema issue; re-prompt or escalate"
+            )
     except Exception as exc:
         error_type = "llm_refusal" if "refused" in str(exc).lower() else "tool_failure"
         # Escalate rather than loop - returning without phase change would re-enter planner forever
