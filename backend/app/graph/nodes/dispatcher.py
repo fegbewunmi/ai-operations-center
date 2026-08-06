@@ -1,5 +1,3 @@
-# Superseded by dispatcher.py — kept to avoid breaking any cached imports.
-# Do not add new logic here.
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -80,7 +78,7 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
         f"Remediation: {top.recommended_action}."
     )
 
-    embedding, service_id = await asyncio.gather(  # type: ignore[name-defined]
+    embedding, service_id = await asyncio.gather(
         _embed_text(embedding_text),
         _get_service_id(incident.service_name),
     )
@@ -157,12 +155,13 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
         )
 
 
-@traced_node("response")
-async def response_node(state: InvestigationState) -> dict:
+@traced_node("dispatcher")
+async def dispatcher_node(state: InvestigationState) -> dict:
     """
-    Dispatches approved remediation actions and notifies stakeholders.
-    L1/L2: logs a Slack notification record and writes incident_memory.
-    L3: creates a PendingApproval and keeps the investigation open for human review.
+    Executes approved remediation actions and notifies stakeholders.
+    Pure workflow — no reasoning: POST Slack record, write incident_memory, update status.
+    L1/L2: dispatches immediately and writes incident_memory.
+    L3: creates a PendingApproval and pauses for human review.
     """
     synthesis = state["synthesis"]
     top = synthesis.top_hypothesis  # type: ignore[union-attr]
@@ -204,7 +203,7 @@ async def response_node(state: InvestigationState) -> dict:
         event_type="action_dispatched",
         service=top.affected_service,
         description=description,
-        source="response_dispatcher",
+        source="action_dispatcher",
     )
 
     return {

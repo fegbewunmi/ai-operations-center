@@ -5,7 +5,7 @@ from app.graph.nodes.deployment import deployment_node
 from app.graph.nodes.incident_analysis import incident_analysis_node
 from app.graph.nodes.knowledge import knowledge_node
 from app.graph.nodes.planner import planner_node
-from app.graph.nodes.response import response_node
+from app.graph.nodes.dispatcher import dispatcher_node
 from app.graph.nodes.safety_guard import safety_guard_node
 from app.graph.nodes.synthesizer import synthesizer_node
 from app.graph.nodes.telemetry import telemetry_node
@@ -37,12 +37,12 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
           |                  /        \\
           |           passed /          \\ failed
           |                /            \\
-          |           response         planner (re-plan)
+          |          dispatcher        planner (re-plan)
           |                |
           +-- escalate --> END
                            ^
                            |
-                       response (after dispatching)
+                      dispatcher (after dispatching)
     """
     builder = StateGraph(InvestigationState)
 
@@ -54,7 +54,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
     builder.add_node("incident_analysis", incident_analysis_node)
     builder.add_node("synthesizer", synthesizer_node)
     builder.add_node("safety_guard", safety_guard_node)
-    builder.add_node("response", response_node)
+    builder.add_node("dispatcher", dispatcher_node)
 
     # --- Edges ---
 
@@ -89,13 +89,13 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
         "safety_guard",
         route_from_safety_guard,
         {
-            "response": "response",
+            "dispatcher": "dispatcher",
             "planner": "planner",
         },
     )
 
-    # Response dispatcher terminates the graph
-    builder.add_edge("response", END)
+    # Action dispatcher terminates the graph
+    builder.add_edge("dispatcher", END)
 
     return builder.compile(checkpointer=checkpointer)
 

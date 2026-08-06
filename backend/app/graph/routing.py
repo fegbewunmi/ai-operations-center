@@ -6,7 +6,7 @@ from app.graph.state import InvestigationState
 
 # Return types for LangGraph conditional edge functions
 PlannerRoute = Literal["telemetry", "deployment", "knowledge", "incident_analysis", "__end__"]
-GuardRoute = Literal["response", "planner"]
+GuardRoute = Literal["dispatcher", "planner"]
 
 
 def route_from_planner(state: InvestigationState) -> PlannerRoute:
@@ -51,5 +51,5 @@ def route_from_safety_guard(state: InvestigationState) -> GuardRoute:
     """
     validation = state.get("validation_result")
     if validation is not None and validation.passed:
-        return "response"
+        return "dispatcher"
     return "planner"

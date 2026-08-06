@@ -202,7 +202,7 @@ async def run_fixture(fixture_path: Path) -> dict:
         patch("app.graph.nodes.knowledge._search_documents", mock_docs),
         patch("app.graph.nodes.knowledge._fetch_service_ownership", mock_ownership),
         patch("app.graph.nodes.planner._fetch_topology", mock_topology),
-        patch("app.graph.nodes.response._write_incident_memory", mock_write_memory),
+        patch("app.graph.nodes.dispatcher._write_incident_memory", mock_write_memory),
     ):
         final_state = await graph.ainvoke(initial_state, config=thread_config)
 
