@@ -43,6 +43,16 @@ class IncidentMemoryRecord(BaseModel):
     embedding: list[float] | None = None  # 768 dims; populated in Phase 2
 
 
+class AnalysisOutput(BaseModel):
+    """Produced by the Incident Analysis Agent — ranked hypotheses before formatting."""
+    model_config = ConfigDict(extra="forbid")
+    hypotheses: list[Hypothesis]  # ranked by confidence_pct desc
+    top_hypothesis: Hypothesis
+    analysis_complete: bool = True
+    requires_escalation: bool = False
+    escalation_reason: str | None = None
+
+
 class SynthesisOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     incident_id: str

@@ -8,7 +8,7 @@ from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
 from app.shared.schemas.knowledge import KnowledgeContext, ServiceTopology
 from app.shared.schemas.planner import PlannerDecision
 from app.shared.schemas.response import DispatchedAction, PendingApproval
-from app.shared.schemas.synthesis import SynthesisOutput
+from app.shared.schemas.synthesis import AnalysisOutput, SynthesisOutput
 from app.shared.schemas.telemetry import TelemetryFindings
 from app.shared.schemas.validation import ValidationResult
 
@@ -32,8 +32,9 @@ class InvestigationState(TypedDict):
     knowledge_context: Annotated[list[KnowledgeContext], operator.add]
     service_topology: ServiceTopology | None
 
-    # Synthesis outputs
-    synthesis: SynthesisOutput | None
+    # Analysis + synthesis outputs
+    analysis_output: AnalysisOutput | None   # from Incident Analysis Agent
+    synthesis: SynthesisOutput | None        # from Synthesizer Agent
     validation_result: ValidationResult | None
 
     # Response outputs

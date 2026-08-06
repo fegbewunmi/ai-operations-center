@@ -2,6 +2,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from app.graph.nodes.deployment import deployment_node
+from app.graph.nodes.incident_analysis import incident_analysis_node
 from app.graph.nodes.knowledge import knowledge_node
 from app.graph.nodes.planner import planner_node
 from app.graph.nodes.response import response_node
@@ -25,15 +26,17 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
           |
         planner  <-----------+-------+-------+
           |                  |       |       |
-          +-- invoke -------> telemetry  deployment  knowledge
+          +-- invoke ------> telemetry  deployment  knowledge
           |                  (each loops back to planner)
           |
-          +-- synthesize --> synthesizer
+          +-- synthesize --> incident_analysis   <-- NEW
+          |                      |
+          |                  synthesizer
           |                      |
           |                 safety_guard
-          |                  /        \
-          |           passed /          \ failed
-          |                /            \
+          |                  /        \\
+          |           passed /          \\ failed
+          |                /            \\
           |           response         planner (re-plan)
           |                |
           +-- escalate --> END
@@ -48,16 +51,16 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
     builder.add_node("telemetry", telemetry_node)
     builder.add_node("deployment", deployment_node)
     builder.add_node("knowledge", knowledge_node)
+    builder.add_node("incident_analysis", incident_analysis_node)
     builder.add_node("synthesizer", synthesizer_node)
     builder.add_node("safety_guard", safety_guard_node)
     builder.add_node("response", response_node)
 
     # --- Edges ---
 
-    # Entry point
     builder.add_edge(START, "planner")
 
-    # Planner routes to a specialist, the synthesizer, or END (escalation / budget exhausted)
+    # Planner routes to a specialist, incident_analysis, or END (escalation / budget)
     builder.add_conditional_edges(
         "planner",
         route_from_planner,
@@ -65,7 +68,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
             "telemetry": "telemetry",
             "deployment": "deployment",
             "knowledge": "knowledge",
-            "synthesizer": "synthesizer",
+            "incident_analysis": "incident_analysis",
             END: END,
         },
     )
@@ -74,6 +77,9 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
     builder.add_edge("telemetry", "planner")
     builder.add_edge("deployment", "planner")
     builder.add_edge("knowledge", "planner")
+
+    # Incident analysis flows to synthesizer (formatting only)
+    builder.add_edge("incident_analysis", "synthesizer")
 
     # Synthesizer always feeds the safety guard
     builder.add_edge("synthesizer", "safety_guard")

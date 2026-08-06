@@ -1,4 +1,10 @@
-import uuid
+"""
+Synthesizer Agent.
+
+Responsibility: turn the Incident Analysis Agent's validated hypotheses into a
+human-readable investigation report. This node does NOT re-derive hypotheses —
+it formats what incident_analysis_node already produced.
+"""
 from datetime import datetime, timezone
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -7,126 +13,111 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.config import settings
 from app.graph.state import InvestigationState
 from app.shared.schemas.core import AgentError, TimelineEvent
-from app.shared.schemas.synthesis import Hypothesis, SynthesisOutput
+from app.shared.schemas.synthesis import SynthesisOutput
 
 _SYSTEM_PROMPT = """
-You are the Synthesizer agent in a multi-agent incident investigation system.
-Your job is to produce a structured root-cause analysis from the complete evidence set.
+You are the Synthesizer in a multi-agent incident investigation system.
+The hard reasoning is already done — another agent has produced ranked hypotheses.
 
-You will receive all telemetry, deployment, and knowledge findings gathered during the investigation.
-Produce a ranked list of root-cause hypotheses, with the most likely first.
+Your job: write a concise, human-readable investigation_summary (3-5 sentences) that:
+- States the most likely root cause in plain language
+- Explains what evidence supports it
+- Calls out the recommended action and authority level
+- Notes any significant alternative hypotheses
 
-For each hypothesis you must:
-- Write a clear, specific description of the failure mode
-- Categorise the root cause (deployment, dependency, resource, configuration, infrastructure, unknown)
-- Assign a confidence percentage based on how well the evidence supports it
-- List the specific pieces of evidence that support it
-- List any evidence that contradicts it
-- Recommend a concrete action (rollback, restart, page team, etc.)
-- Assign authority level: L1 = automated fix safe, L2 = engineer action, L3 = requires approval
-
-Be specific and actionable. Reference exact versions, timestamps, and service names from the evidence.
+Write for an on-call engineer who has 30 seconds to read it. Be direct. No filler.
 """.strip()
 
 
-def _build_evidence_block(state: InvestigationState) -> str:
+def _hypothesis_block(state: InvestigationState) -> str:
+    analysis = state["analysis_output"]
     incident = state["incident"]
-    budget = state["budget"]
+
     parts = [
-        f"INCIDENT: {incident.alert_name}",
-        f"  Service: {incident.service_name}",
-        f"  Severity: {incident.severity}",
-        f"  Onset: {incident.onset_timestamp}",
-        f"  Description: {incident.description}",
-        f"  Iterations used: {budget.iterations_used}",
+        f"Incident: {incident.alert_name} on {incident.service_name} ({incident.severity})",
+        f"Onset: {incident.onset_timestamp}",
+        f"Description: {incident.description}",
         "",
+        "Ranked hypotheses from Incident Analysis Agent:",
     ]
 
-    for f in state["telemetry_findings"]:
-        parts += [f"TELEMETRY [{f.service}]: {f.summary}", ""]
-
-    for f in state["deployment_findings"]:
-        parts += [f"DEPLOYMENTS [{f.service}]: {f.summary}"]
-        if f.deployment_near_onset and f.nearest_deployment_minutes is not None:
-            parts.append(f"  *** Deployment {f.nearest_deployment_minutes:.0f} min before onset ***")
-        for d in f.deployments:
-            changes = ", ".join(d.config_changes) if d.config_changes else "none"
-            parts.append(
-                f"  - {d.version_to} by {d.deployed_by} "
-                f"({d.minutes_before_onset:.0f} min before onset, changes: {changes})"
-            )
-        parts.append("")
-
-    for k in state["knowledge_context"]:
-        parts += [f"KNOWLEDGE [{k.query[:60]}]: {k.summary}"]
-        for r in k.results[:3]:
-            parts.append(f"  - [{r.document_type}] {r.title} (relevance: {r.relevance_score:.2f})")
-        if k.ownership:
-            parts.append(f"  Ownership: team={k.ownership.team}, slack={k.ownership.slack_channel}")
-        parts.append("")
-
-    if state.get("planner_working_hypothesis"):
+    for i, h in enumerate(analysis.hypotheses, 1):  # type: ignore[union-attr]
         parts += [
-            f"PLANNER FINAL HYPOTHESIS: {state['planner_working_hypothesis']}",
-            f"PLANNER CONFIDENCE: {state['planner_working_confidence']:.0%}",
-            "",
+            f"",
+            f"Hypothesis {i}: {h.description}",
+            f"  Root cause category: {h.root_cause_category}",
+            f"  Confidence: {h.confidence_pct:.0f}%",
+            f"  Authority level: {h.authority_level}",
+            f"  Recommended action: {h.recommended_action}",
+            f"  Supporting evidence: {'; '.join(h.supporting_evidence)}",
         ]
+        if h.contradicting_evidence:
+            parts.append(f"  Contradicting evidence: {'; '.join(h.contradicting_evidence)}")
 
     return "\n".join(parts)
 
 
 async def synthesizer_node(state: InvestigationState) -> dict:
     """
-    Produces ranked root-cause hypotheses from the complete evidence set.
-    Uses structured output to guarantee a valid SynthesisOutput.
+    Reads analysis_output (hypotheses) from state and writes a human-readable
+    investigation summary. Builds the final SynthesisOutput from both.
     """
-    llm = ChatGoogleGenerativeAI(
-        model=settings.gemini_model,
-        google_api_key=settings.gemini_api_key,
-        temperature=0.2,
-    )
-    structured_llm = llm.with_structured_output(SynthesisOutput)
-
-    evidence = _build_evidence_block(state)
-    incident = state["incident"]
-
-    user_msg = (
-        f"{evidence}\n\n"
-        "Based on all the evidence above, produce a SynthesisOutput with:\n"
-        "- 1-3 ranked hypotheses (most likely first)\n"
-        "- A concise investigation_summary (3-5 sentences)\n"
-        "- top_hypothesis set to the first/most likely hypothesis\n"
-        f"- incident_id set to '{incident.incident_id}'\n"
-        "- investigation_incomplete=False if confidence is sufficient\n"
-        "- requires_escalation=True only if no clear root cause can be determined\n"
-    )
-
-    try:
-        synthesis: SynthesisOutput = await structured_llm.ainvoke([
-            ("system", _SYSTEM_PROMPT),
-            ("human", user_msg),
-        ])
-    except Exception as exc:
+    analysis = state.get("analysis_output")
+    if analysis is None:
         return {
             "error_log": [AgentError(
                 agent="synthesizer",
-                query_summary="produce synthesis",
-                error_type="llm_failure",
-                message=str(exc),
+                query_summary="read analysis_output",
+                error_type="tool_failure",
+                message="analysis_output is None — incident_analysis_node did not produce output",
                 timestamp=datetime.now(timezone.utc),
                 retries_attempted=0,
             )],
             "phase": "escalated",
-            "escalation_reason": f"Synthesizer failed: {exc}",
+            "escalation_reason": "Synthesizer received no analysis output",
         }
+
+    incident = state["incident"]
+    llm = ChatGoogleGenerativeAI(
+        model=settings.gemini_model,
+        google_api_key=settings.gemini_api_key,
+        temperature=0.3,
+    )
+
+    try:
+        response = await llm.ainvoke([
+            SystemMessage(content=_SYSTEM_PROMPT),
+            HumanMessage(content=_hypothesis_block(state)),
+        ])
+        summary = response.content.strip()
+    except Exception as exc:
+        # Non-fatal: fall back to a mechanical summary rather than escalating
+        top = analysis.top_hypothesis
+        summary = (
+            f"Investigation complete. Most likely root cause: {top.description} "
+            f"(confidence {top.confidence_pct:.0f}%). "
+            f"Recommended action ({top.authority_level}): {top.recommended_action}."
+        )
+
+    synthesis = SynthesisOutput(
+        incident_id=incident.incident_id,
+        investigation_summary=summary,
+        hypotheses=analysis.hypotheses,
+        top_hypothesis=analysis.top_hypothesis,
+        requires_escalation=analysis.requires_escalation,
+        escalation_reason=analysis.escalation_reason,
+        investigation_incomplete=False,
+    )
 
     event = TimelineEvent(
         timestamp=datetime.now(timezone.utc),
         event_type="investigation_finding",
         service=incident.service_name,
         description=(
-            f"Synthesis complete. Top hypothesis: {synthesis.top_hypothesis.description[:120]} "
-            f"(confidence: {synthesis.top_hypothesis.confidence_pct:.0f}%)"
+            f"Synthesis complete. "
+            f"Top: {analysis.top_hypothesis.description[:100]} "
+            f"({analysis.top_hypothesis.confidence_pct:.0f}% confidence, "
+            f"{analysis.top_hypothesis.authority_level})"
         ),
         source="synthesizer",
     )

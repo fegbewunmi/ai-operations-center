@@ -5,7 +5,7 @@ from langgraph.graph import END
 from app.graph.state import InvestigationState
 
 # Return types for LangGraph conditional edge functions
-PlannerRoute = Literal["telemetry", "deployment", "knowledge", "synthesizer", "__end__"]
+PlannerRoute = Literal["telemetry", "deployment", "knowledge", "incident_analysis", "__end__"]
 GuardRoute = Literal["response", "planner"]
 
 
@@ -31,7 +31,7 @@ def route_from_planner(state: InvestigationState) -> PlannerRoute:
         return END  # type: ignore[return-value]
 
     if decision.action == "synthesize":
-        return "synthesizer"
+        return "incident_analysis"
 
     # decision.action == "invoke"
     agent = decision.agent

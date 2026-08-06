@@ -1,15 +1,20 @@
+import asyncio
+import json
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
+from app.config import settings
+from app.db.session import AsyncSessionLocal, get_db
 from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
 from app.shared.schemas.response import PendingApproval
-from app.config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/investigations", tags=["investigations"])
 
 
@@ -46,6 +51,73 @@ class ApprovalRequest(BaseModel):
     notes: str | None = None
 
 
+# --- Helpers ---
+
+async def _persist_incident_and_investigation(
+    incident_db_id: str,
+    investigation_id: str,
+    incident: IncidentTrigger,
+) -> None:
+    """
+    Write incidents + investigations rows before starting the graph.
+    incident_db_id is a fresh UUID (the IncidentTrigger.incident_id may be a
+    human-readable string like "INC-001" that won't fit a UUID primary key).
+    """
+    metadata = {"original_id": incident.incident_id, **incident.alert_metadata}
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            text("""
+                INSERT INTO incidents (
+                    incident_id, alert_name, severity, service_name,
+                    onset_timestamp, description, alert_metadata
+                ) VALUES (
+                    :incident_id::uuid, :alert_name, :severity, :service_name,
+                    :onset_timestamp::timestamptz, :description, :alert_metadata::jsonb
+                ) ON CONFLICT (incident_id) DO NOTHING
+            """),
+            {
+                "incident_id": incident_db_id,
+                "alert_name": incident.alert_name,
+                "severity": incident.severity,
+                "service_name": incident.service_name,
+                "onset_timestamp": incident.onset_timestamp,
+                "description": incident.description,
+                "alert_metadata": json.dumps(metadata),
+            },
+        )
+        await db.execute(
+            text("""
+                INSERT INTO investigations (investigation_id, incident_id, phase)
+                VALUES (:investigation_id::uuid, :incident_id::uuid, 'planning')
+            """),
+            {"investigation_id": investigation_id, "incident_id": incident_db_id},
+        )
+        await db.commit()
+
+
+async def _run_investigation(
+    graph,
+    initial_state: dict,
+    thread_config: dict,
+    investigation_id: str,
+) -> None:
+    """Background task: run the graph; mark escalated in DB on unhandled error."""
+    try:
+        await graph.ainvoke(initial_state, config=thread_config)
+    except Exception as exc:
+        logger.error("Investigation %s failed unexpectedly: %s", investigation_id, exc, exc_info=True)
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("""
+                    UPDATE investigations
+                    SET phase = 'escalated', completed_at = NOW()
+                    WHERE investigation_id = :id::uuid
+                """),
+                {"id": investigation_id},
+            )
+            await db.commit()
+
+
 # --- Endpoints ---
 
 @router.post("", response_model=StartInvestigationResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -55,12 +127,15 @@ async def start_investigation(
     db: AsyncSession = Depends(get_db),
 ) -> StartInvestigationResponse:
     """
-    Trigger a new investigation for an incoming incident alert.
-    Returns immediately with an investigation_id; the graph runs asynchronously.
+    Trigger a new investigation. Returns 202 immediately; the graph runs in the background.
+    Poll /status to track progress.
     """
     graph = request.app.state.investigation_graph
     investigation_id = str(uuid.uuid4())
+    incident_db_id = str(uuid.uuid4())
     thread_config = {"configurable": {"thread_id": investigation_id}}
+
+    await _persist_incident_and_investigation(incident_db_id, investigation_id, body.incident)
 
     initial_state = {
         "investigation_id": investigation_id,
@@ -80,6 +155,7 @@ async def start_investigation(
         "deployment_findings": [],
         "knowledge_context": [],
         "service_topology": None,
+        "analysis_output": None,
         "synthesis": None,
         "validation_result": None,
         "dispatched_actions": [],
@@ -90,13 +166,14 @@ async def start_investigation(
         "error_log": [],
     }
 
-    # TODO: run in background task / Cloud Tasks to avoid blocking the HTTP response
-    await graph.ainvoke(initial_state, config=thread_config)
+    asyncio.create_task(
+        _run_investigation(graph, initial_state, thread_config, investigation_id)
+    )
 
     return StartInvestigationResponse(
         investigation_id=investigation_id,
         status="accepted",
-        message="Investigation started",
+        message="Investigation started. Poll /status for progress.",
     )
 
 
@@ -186,7 +263,6 @@ async def submit_approval(
     """
     Submit a human approval decision for an L3-escalated investigation.
     On approval, resumes the graph from its saved checkpoint.
-    On rejection, marks the investigation as escalated with a reason.
     """
     graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
@@ -210,11 +286,11 @@ async def submit_approval(
         )
         return {"status": "rejected", "investigation_id": investigation_id}
 
-    # Approval granted - resume from checkpoint
     await graph.aupdate_state(
         config=thread_config,
         values={"phase": "responding"},
     )
-    await graph.ainvoke(None, config=thread_config)
-
+    asyncio.create_task(
+        _run_investigation(graph, None, thread_config, investigation_id)
+    )
     return {"status": "approved", "investigation_id": investigation_id}
