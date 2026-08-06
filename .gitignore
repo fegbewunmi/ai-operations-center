@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# Environment files — never commit secrets
+.env.local
+.env.*.local
+*.env
+
+# GCP credentials — never commit
+credentials.json
+service-account*.json
+*-sa-key.json
+*.pem
+*.p12
+application_default_credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Mypy
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Docker
+.dockerenv
+
+# Eval run results (can be large; store selectively)
+evaluations/results/
+evaluations/reports/
+
+# Datasets (generated; not source-controlled)
+datasets/*.json
+datasets/*.parquet
+
+# Alembic — migrations are committed, compiled cache is not
+infrastructure/migrations/__pycache__/
+
+# Terraform state (if used later)
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# OS
+Thumbs.db
