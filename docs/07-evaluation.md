@@ -95,7 +95,7 @@ from evaluations.harness import EvalHarness
 harness = EvalHarness(
     incident_ids=["INC-FD-001", "INC-FD-002", ...],  # or "all"
     use_fixtures=True,
-    graph_config=GraphConfig(model="gemini-2.0-flash", ...),
+    graph_config=GraphConfig(model="gemini-2.5-flash", ...),
 )
 result: EvalResult = await harness.run()
 
@@ -105,7 +105,7 @@ report = compare_runs(baseline=load_result("results/baseline.json"), current=res
 print(report.summary())
 ```
 
-Each eval run costs real Gemini API tokens. At 15 incidents × ~6 LLM calls per investigation (3–5 Planner iterations + Synthesizer + Safety Guard), expect approximately 90 Gemini calls per full eval run. Plan for this cost when running eval on every PR vs. only before merging.
+Each eval run costs real Vertex AI tokens. At 15 incidents × ~6 LLM calls per investigation (3–5 Planner iterations + Synthesizer + Safety Guard), expect approximately 90 model calls per full eval run. Plan for this cost when running eval on every PR vs. only before merging.
 
 ---
 
@@ -207,7 +207,7 @@ Report both the strict score (category AND service) and the component scores. Co
 mttfh_seconds = (synthesis_timestamp - investigation_started_at).total_seconds()
 ```
 
-**Nuance:** In eval, LLM latency is real (Gemini API calls take 1–5 seconds each). Wall-clock MTTFH in eval includes this. Production MTTFH may differ based on concurrency and model endpoint latency. Report both the median and p95 - a high p95 reveals incidents that send the Planner into a long investigation loop.
+**Nuance:** In eval, LLM latency is real (Vertex AI calls take 1–5 seconds each). Wall-clock MTTFH in eval includes this — the 3-fixture baseline averages 77s. Production MTTFH may differ based on concurrency and model endpoint latency. Report both the median and p95 — a high p95 reveals incidents that send the Planner into a long investigation loop.
 
 **Target:** Median < 5 minutes on the synthetic dataset.
 

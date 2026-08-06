@@ -1,6 +1,6 @@
 # ADR-001: Use Gemini API directly (not Vertex AI) for initial implementation
 
-**Status:** Accepted — migration to Vertex AI planned as a production milestone  
+**Status:** Superseded — Vertex AI migration completed 2026-08-06
 **Date:** 2026-08-06
 
 ## Context
@@ -16,7 +16,7 @@ Two options in the Google ecosystem:
 | | Gemini API (Google AI) | Vertex AI |
 |---|---|---|
 | Auth | API key | Service account / ADC |
-| SDK | `langchain-google-genai` | `langchain-google-vertexai` |
+| SDK | `langchain-google-genai` | `langchain-google-genai` v2 (unified) |
 | Model access | Same Gemini models | Same Gemini models |
 | Billing | Per-request | Per-request (same rates) |
 | IAM integration | None | Full GCP IAM |
@@ -25,30 +25,49 @@ Two options in the Google ecosystem:
 | Enterprise SLA | No | Yes |
 | Local dev | Simple (one env var) | Requires ADC setup |
 
-## Decision
+## Original Decision
 
 Start with the **Gemini API** via `langchain-google-genai` and a single `GEMINI_API_KEY`.
 
 Rationale:
 - Reduces Day 1 setup friction — API key in Secret Manager is simpler than service account IAM wiring
 - Identical model access and output quality; no functional difference at this scale
-- LangChain's `ChatGoogleGenerativeAI` and `ChatVertexAI` share the same interface — migration is a swap, not a rewrite
 - Structured output (`.with_structured_output(Pydantic model)`) works identically on both
+- Migration to Vertex AI before production is required for IAM, audit trails, and enterprise SLA
 
-## Consequences
+## Migration Outcome (2026-08-06)
 
-- Local development requires only `GEMINI_API_KEY` — no `gcloud auth application-default login` needed for the LLM calls
-- No Cloud Audit Logs for LLM calls (only relevant for compliance-sensitive environments)
-- Migration to Vertex AI before production is required for:
-  - GCP-native IAM and audit trails
-  - VPC Service Controls (if data classification requires it)
-  - Enterprise SLA coverage
+Migration completed as planned. Two lessons from execution:
 
-## Migration plan (production milestone)
+**Lesson 1: `langchain-google-vertexai` is deprecated.** The originally-planned migration path (`ChatVertexAI` from `langchain-google-vertexai`) was attempted first. The library works but emits deprecation warnings pointing to `langchain-google-genai` v2 as the unified successor. The final implementation uses `ChatGoogleGenerativeAI` from `langchain-google-genai` with `GOOGLE_GENAI_USE_VERTEXAI=true` — this routes to the Vertex AI endpoint via ADC with no package change from the original Developer API integration.
 
-1. Replace `langchain-google-genai` with `langchain-google-vertexai` in `pyproject.toml`
-2. Change `ChatGoogleGenerativeAI(google_api_key=...)` → `ChatVertexAI(model=..., project=..., location=...)` in synthesizer, planner, and knowledge nodes
-3. Update embedding call in `knowledge.py` to use the Vertex AI Embeddings API instead of the direct REST call
-4. Remove `GEMINI_API_KEY` from Secret Manager; ensure Cloud Run service account has `roles/aiplatform.user`
-5. Remove `gemini_api_key` from `Settings`; add `gcp_region` (already present) for Vertex AI endpoint selection
-6. Update local dev docs: `gcloud auth application-default login` now required
+**Lesson 2: Model availability requires explicit provisioning.** `gemini-2.0-flash-001` was not provisioned in the project's Vertex AI catalog. The system uses `gemini-2.5-flash` (stable alias, available in the project's Model Garden without additional access requests). Model name is centralized in `Settings.gemini_model` so future changes are one-line.
+
+## Final State
+
+| Config | Value |
+|---|---|
+| Package | `langchain-google-genai>=2.0.0` |
+| LLM class | `ChatGoogleGenerativeAI` |
+| Vertex AI routing | `GOOGLE_GENAI_USE_VERTEXAI=true` env var |
+| LLM model | `gemini-2.5-flash` |
+| Embedding class | `GoogleGenerativeAIEmbeddings` |
+| Embedding model | `text-embedding-004` (768d) |
+| Auth | Application Default Credentials (ADC) |
+| Secret Manager | `DATABASE_URL` only — no API key |
+
+Cloud Run service account requires `roles/aiplatform.user` for Vertex AI model access.
+
+## Eval results after migration
+
+All 3 fixture incidents pass on `gemini-2.5-flash` via Vertex AI:
+
+```
+Root-cause accuracy:      100%
+Evidence completeness:    100%
+Required specialists:     100%
+Avg MTTFH:                77s
+Safety Guard trigger rate: 0%
+```
+
+MTTFH increased slightly from 48s (Developer API) to 77s (Vertex AI) — consistent with enterprise endpoint routing overhead, not a model reasoning change.

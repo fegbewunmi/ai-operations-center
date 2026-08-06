@@ -8,7 +8,7 @@ Built on Google Cloud Platform to demonstrate production-grade multi-agent syste
 
 ## What it does
 
-When a Prometheus or Cloud Monitoring alert fires, a single `POST /v1/investigations` returns **202 immediately** and runs the investigation in the background. A Planner agent (Gemini 2.5 Flash) coordinates three specialist agents - Telemetry, Deployment, Knowledge - iterating through evidence until it reaches sufficient confidence or exhausts its budget.
+When a Prometheus or Cloud Monitoring alert fires, a single `POST /v1/investigations` returns **202 immediately** and runs the investigation in the background. A Planner agent (Gemini 2.5 Flash via Vertex AI) coordinates three specialist agents - Telemetry, Deployment, Knowledge - iterating through evidence until it reaches sufficient confidence or exhausts its budget.
 
 **Demo result:** On a simulated P1 incident for the `payments` service, the system independently identified a deployment 15 minutes before onset, cross-referenced a prior postmortem with a matching failure pattern, and returned a ranked root-cause with 85% confidence and a specific rollback recommendation - in under 2 minutes.
 
@@ -54,14 +54,14 @@ The investigation graph is a **LangGraph StateGraph** compiled with an `AsyncPos
 |---|---|---|
 | API layer | FastAPI + uvicorn | Async-first; returns 202 immediately via `asyncio.create_task` |
 | Orchestration | LangGraph StateGraph | Typed reducers, checkpointing, conditional routing |
-| LLM | Gemini 2.5 Flash (Gemini API) | Structured output via Pydantic; `ChatGoogleGenerativeAI` |
-| Embeddings | gemini-embedding-001 (768d) | Same API key; used for knowledge RAG and incident memory |
+| LLM | Gemini 2.5 Flash (Vertex AI) | Structured output via Pydantic; `ChatGoogleGenerativeAI` + `GOOGLE_GENAI_USE_VERTEXAI=true` |
+| Embeddings | text-embedding-004 (768d) | Vertex AI via `GoogleGenerativeAIEmbeddings`; used for knowledge RAG and incident memory |
 | Checkpointing | LangGraph AsyncPostgresSaver | Full state persistence; enables mid-graph human approval resume |
 | Database | Cloud SQL Postgres 15 + pgvector | Operational data + vector similarity search |
 | Metrics source | google-cloud-monitoring | Cloud Monitoring API queried in the incident window |
 | Tracing | OpenTelemetry + Cloud Trace | `@traced_node` on every graph node; per-investigation flame graphs |
 | Hosting | Cloud Run | Serverless, scales to zero, VPC connector for Cloud SQL |
-| Secrets | Secret Manager | DB credentials and API key - never in env files or images |
+| Secrets | Secret Manager | DB credentials - never in env files or images; LLM auth via ADC/service account |
 
 ---
 
@@ -71,8 +71,7 @@ The investigation graph is a **LangGraph StateGraph** compiled with an `AsyncPos
 
 - Python 3.11+
 - [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/mysql/sql-proxy): `brew install cloud-sql-proxy`
-- `gcloud` CLI: `gcloud auth application-default login`
-- Gemini API key from [aistudio.google.com](https://aistudio.google.com)
+- `gcloud` CLI authenticated: `gcloud auth application-default login`
 
 ### Install
 
@@ -87,7 +86,8 @@ pip install -e ".[dev]"
 
 ```bash
 cp .env.example .env
-# Set: DATABASE_URL, GCP_PROJECT_ID, GEMINI_API_KEY
+# Set: DATABASE_URL, GCP_PROJECT_ID
+# LLM auth uses Application Default Credentials — no API key required
 ```
 
 ### Start Cloud SQL Auth Proxy (separate terminal)
@@ -100,7 +100,7 @@ cloud-sql-proxy ai-ops-center-eb26:us-central1:ai-ops-db --port 5433
 
 ```bash
 python -m alembic upgrade head
-DB_PASSWORD=<pass> GEMINI_API_KEY=<key> python scripts/seed_data.py
+DB_PASSWORD=<pass> python scripts/seed_data.py
 ```
 
 ### Start the API
@@ -148,7 +148,7 @@ DATABASE_URL="postgresql+asyncpg://ai_ops_user:PASSWORD@localhost:5433/ai_ops" \
   pytest tests/test_deployment_node.py -v
 ```
 
-**41 tests total:** safety_guard (14), planner (7), synthesizer (6), incident_analysis (5), telemetry (5), knowledge (3), deployment (8 integration + 2 unit).
+**41 unit tests** (excluding deployment integration tests that require the Auth Proxy): safety_guard (15), planner (7), synthesizer (6), incident_analysis (5), telemetry (5), knowledge (3).
 
 ---
 
@@ -157,11 +157,19 @@ DATABASE_URL="postgresql+asyncpg://ai_ops_user:PASSWORD@localhost:5433/ai_ops" \
 The harness replaces all external APIs (Cloud Monitoring, deployment DB, knowledge DB) with pre-authored fixture data while keeping all LLM calls real. Tests agent reasoning without a database or network.
 
 ```bash
-# Run all 3 fixture incidents (requires only GEMINI_API_KEY)
-GEMINI_API_KEY=<key> python -m eval.run_eval
+# Run all 3 fixture incidents (requires ADC — no API key)
+GOOGLE_GENAI_USE_VERTEXAI=true \
+GOOGLE_CLOUD_PROJECT=ai-ops-center-eb26 \
+GOOGLE_CLOUD_LOCATION=us-central1 \
+GCP_PROJECT_ID=ai-ops-center-eb26 \
+DATABASE_URL="postgresql+asyncpg://user:pass@localhost/db" \
+python -m eval.run_eval
 
 # Run one fixture and write JSON results
-GEMINI_API_KEY=<key> python -m eval.run_eval --fixture INC-FD-001 --output results.json
+GOOGLE_GENAI_USE_VERTEXAI=true GOOGLE_CLOUD_PROJECT=ai-ops-center-eb26 \
+GOOGLE_CLOUD_LOCATION=us-central1 GCP_PROJECT_ID=ai-ops-center-eb26 \
+DATABASE_URL="postgresql+asyncpg://user:pass@localhost/db" \
+python -m eval.run_eval --fixture INC-FD-001 --output results.json
 ```
 
 **Incident fixtures:**
@@ -189,7 +197,9 @@ gcloud run deploy ai-ops-api \
   --image us-central1-docker.pkg.dev/<project>/ai-ops-images/api:latest \
   --region us-central1 \
   --add-cloudsql-instances <project>:us-central1:ai-ops-db \
-  --set-secrets DATABASE_URL=db-url:latest,GEMINI_API_KEY=gemini-api-key:latest
+  --set-secrets DATABASE_URL=db-url:latest \
+  --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_LOCATION=us-central1
+# LLM auth: grant the Cloud Run service account roles/aiplatform.user (no API key in secrets)
 ```
 
 **Live:** `https://ai-ops-api-zndywutdxa-uc.a.run.app`

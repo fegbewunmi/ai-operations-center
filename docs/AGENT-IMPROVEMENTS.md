@@ -279,6 +279,62 @@ All three fixtures resolve in exactly 4 iterations: one per specialist, one synt
 
 ---
 
+## Issue #5: Vertex AI Migration
+
+### Context
+
+The Gemini Developer API (API key auth) was used throughout development. Before production, the system must move to Vertex AI for GCP-native IAM, Cloud Audit Logs, VPC Service Controls, and enterprise SLA coverage. See `backend/docs/adr/001-gemini-api-vs-vertex-ai.md`.
+
+### First attempt: `langchain-google-vertexai` / `ChatVertexAI`
+
+The obvious migration path — swap `langchain-google-genai` for `langchain-google-vertexai` and replace `ChatGoogleGenerativeAI` with `ChatVertexAI` — was attempted first. It produced deprecation warnings on every call:
+
+```
+DeprecationWarning: ChatVertexAI is deprecated. Please use ChatGoogleGenerativeAI from
+langchain-google-genai and set GOOGLE_GENAI_USE_VERTEXAI=true to use Vertex AI endpoint.
+```
+
+`langchain-google-vertexai` is being superseded by a unified `langchain-google-genai` v2 package. The two SDKs share the same interface; the Vertex AI routing is now a single env var.
+
+### Fix: unified package with env var routing
+
+Reverted to `langchain-google-genai>=2.0.0`. With `GOOGLE_GENAI_USE_VERTEXAI=true` set, `ChatGoogleGenerativeAI` and `GoogleGenerativeAIEmbeddings` route to the Vertex AI endpoint via ADC — no API key, no package change from the original integration. The `gemini_api_key` field was removed from `Settings`; Cloud Run will use the service account's `roles/aiplatform.user` instead of a Secret Manager entry.
+
+### Model availability issue
+
+With the Vertex AI API enabled, `gemini-2.0-flash-001` returned a 404:
+
+```
+Publisher model `projects/ai-ops-center-eb26/locations/us-central1/publishers/google/
+models/gemini-2.0-flash-001` was not found or your project does not have access to it.
+```
+
+New GCP projects may not have all model versions pre-provisioned; access to specific version pins sometimes requires explicit Model Garden opt-in. `gemini-2.5-flash` (stable alias, current generation, available in this project's catalog) replaced it. The model is centralized in `Settings.gemini_model` — a one-line change.
+
+### Scorer diagnostic improvement
+
+The failure pattern (0 iterations, immediate escalation) gave no visible error in the original scorer output — just "No synthesis output." The scorer was updated to surface `escalation_reason` and `error_log` entries from state, so future auth or model errors appear on the ERRORS line directly in eval output.
+
+### Result on Vertex AI
+
+```
+INC-FD-001  Phase: complete  Accuracy: PASS  Confidence: 95%  MTTFH: 61s  Iterations: 4  Guard: False
+INC-LR-001  Phase: complete  Accuracy: PASS  Confidence: 95%  MTTFH: 90s  Iterations: 4  Guard: False
+INC-RL-001  Phase: complete  Accuracy: PASS  Confidence: 95%  MTTFH: 81s  Iterations: 4  Guard: False
+
+Root-cause accuracy:      100%  (target ≥ 75%)
+Evidence completeness:    100%  (target ≥ 80%)
+Required specialists:     100%  (target ≥ 90%)
+Avg MTTFH:                77s   (target < 300s)
+Safety Guard trigger rate: 0%   (target < 30%)
+
+✓ All ship thresholds met.
+```
+
+MTTFH increased from 48s (Developer API) to 77s (Vertex AI). This is consistent with enterprise endpoint routing overhead — the reasoning quality and accuracy are unchanged. Confidence increased from 85–95% range to uniform 95% across all fixtures, reflecting Gemini 2.5 Flash's stronger calibration vs. 2.0.
+
+---
+
 ## Key Lessons
 
 **Discriminated unions matter for structured output.** When a Pydantic model with an undiscriminated `anyOf` union is sent to Gemini as a response schema, the model has no reliable way to choose between variants. Adding a `Literal` discriminator field changes the schema from "pick one of these overlapping shapes" to "set this field to indicate which shape." Small schema changes have large effects on structured output reliability.
@@ -304,11 +360,15 @@ All three fixtures resolve in exactly 4 iterations: one per specialist, one synt
 | `graph/nodes/planner.py` | FORBIDDEN ACTIONS + REQUIRED NEXT ACTION blocks; `query_type` alignment rule in system prompt; evidence deduplication | Prompt |
 | `graph/nodes/safety_guard.py` | Expanded from 2 to 4 checks; each check sets named field on `ValidationResult` | Architecture |
 | `graph/nodes/dispatcher.py` | New file replacing `response.py`; same logic, accurate name | Architecture |
-| `tests/test_safety_guard_node.py` | Rewritten to 14 tests covering all four checks | Testing |
+| `tests/test_safety_guard_node.py` | Rewritten to 15 tests covering all four checks | Testing |
 | `eval/runner.py` | Updated patch path to `dispatcher._write_incident_memory` | Testing |
 | `graph/nodes/incident_analysis.py` | Category definitions with deployment/resource temporal distinction; raw excerpts forwarded from knowledge results | Prompt + Pipeline |
 | `graph/nodes/planner.py` | No-recent-deploy heuristic (>720 min) to require knowledge before synthesis | Prompt |
 | `eval/scorer.py` | `actual_root_cause_category` and `expected_root_cause_category` fields added | Evaluation |
 | `eval/run_eval.py` | Category fields added to JSON output | Evaluation |
+| `app/config.py` | Removed `gemini_api_key`; model updated to `gemini-2.5-flash`, embedding to `text-embedding-004` | Config |
+| All 8 graph nodes | `ChatGoogleGenerativeAI` + `GoogleGenerativeAIEmbeddings` via Vertex AI; no API key | LLM auth |
+| `pyproject.toml` | Removed `langchain-google-vertexai`, `google-genai`; kept `langchain-google-genai>=2.0.0` | Dependencies |
+| `eval/scorer.py` | Surfaces `escalation_reason` and `error_log` entries in ERRORS line | Evaluation |
 
 All 41 unit tests pass. Integration tests (deployment node against Cloud SQL) excluded from this session — they require the Auth Proxy on port 5433.
