@@ -9,9 +9,9 @@
 
 The system runs LangGraph agents on Cloud Run, makes LLM calls via Vertex AI, reads from Cloud SQL, and executes multi-step investigations with a variable number of agent invocations per run. Meaningful observability requires three distinct layers:
 
-1. **Infrastructure** — Is Cloud Run healthy? Is Cloud SQL reachable? Request rate, latency, error rate.
-2. **Investigation execution** — Which agents ran? How many Planner iterations? What was MTTFH? Did the Safety Guard trigger?
-3. **LLM calls** — Per-model-call latency, token usage broken down by agent, estimated cost per investigation.
+1. **Infrastructure** - Is Cloud Run healthy? Is Cloud SQL reachable? Request rate, latency, error rate.
+2. **Investigation execution** - Which agents ran? How many Planner iterations? What was MTTFH? Did the Safety Guard trigger?
+3. **LLM calls** - Per-model-call latency, token usage broken down by agent, estimated cost per investigation.
 
 All three layers require instrumentation. The choice of platform determines how that instrumentation is collected, stored, and visualized.
 
@@ -25,10 +25,10 @@ All three layers require instrumentation. The choice of platform determines how 
 - Custom investigation metrics pushed to Cloud Monitoring via the Cloud Monitoring API
 - Logs structured as JSON to Cloud Logging (Cloud Run captures stdout automatically)
 - Zero additional managed services; no additional accounts; consistent with GCP-native project architecture
-- LLM observability requires custom OpenTelemetry spans — this is the known tradeoff
+- LLM observability requires custom OpenTelemetry spans - this is the known tradeoff
 
 **Option B: Prometheus + Grafana**
-- Prometheus requires persistent storage for its TSDB — problematic on stateless Cloud Run without additional infrastructure (separate VM or Cloud Run service with Cloud Storage backing)
+- Prometheus requires persistent storage for its TSDB - problematic on stateless Cloud Run without additional infrastructure (separate VM or Cloud Run service with Cloud Storage backing)
 - Would need Jaeger or Zipkin separately for distributed tracing
 - Infrastructure overhead is disproportionate to what the project needs; no tracing story without additional setup
 - Rejected: setup cost exceeds benefit; undercuts the GCP-native narrative
@@ -150,7 +150,7 @@ One Cloud Monitoring dashboard with four sections:
 - MTTFH distribution (histogram)
 - Total latency distribution (histogram)
 - Planner iterations distribution
-- Safety Guard trigger rate (line chart — should trend downward as prompts improve)
+- Safety Guard trigger rate (line chart - should trend downward as prompts improve)
 
 **Section 3: LLM usage and cost**
 - Tokens per investigation (distribution, by incident family)
@@ -159,10 +159,10 @@ One Cloud Monitoring dashboard with four sections:
 - Token usage by agent (stacked bar: Planner, Telemetry, Deployment, Knowledge, Synthesizer)
 
 **Section 4: Evaluation results**
-- Root-cause accuracy over eval runs (line chart — catches prompt regressions)
+- Root-cause accuracy over eval runs (line chart - catches prompt regressions)
 - Evidence completeness rate
 - Unsupported claim rate
-- These are pushed from the eval harness after each run — production and eval share the same metrics backend
+- These are pushed from the eval harness after each run - production and eval share the same metrics backend
 
 ---
 
@@ -170,14 +170,14 @@ One Cloud Monitoring dashboard with four sections:
 
 LLM-specific observability (token usage per call, model latency, prompt logging) requires custom OpenTelemetry instrumentation. The OpenTelemetry GenAI semantic conventions (`gen_ai.*` attributes) cover the standard fields; cost estimation requires mapping token counts to model pricing, which must be updated when Vertex AI pricing changes.
 
-Datadog LLM Observability handles this without custom instrumentation. Teams who already run Datadog could adopt it by swapping the OpenTelemetry exporter — the instrumentation code itself would not change.
+Datadog LLM Observability handles this without custom instrumentation. Teams who already run Datadog could adopt it by swapping the OpenTelemetry exporter - the instrumentation code itself would not change.
 
 ---
 
 ## Consequences
 
 - All observability data lives in GCP: no additional accounts, no additional billing relationships
-- The OpenTelemetry API is vendor-neutral — the exporter can be swapped (e.g., to Datadog) without changing instrumentation code
+- The OpenTelemetry API is vendor-neutral - the exporter can be swapped (e.g., to Datadog) without changing instrumentation code
 - Cost estimation requires a maintained pricing map; this is a small maintenance burden
-- Cloud Trace's flame graph view gives a direct visual of each investigation's execution path — this is the primary debugging tool for Planner reasoning issues
-- The eval harness pushing metrics to Cloud Monitoring means production monitoring and eval quality tracking share a single dashboard — an on-call engineer sees the same accuracy metrics the engineering team sees in eval
+- Cloud Trace's flame graph view gives a direct visual of each investigation's execution path - this is the primary debugging tool for Planner reasoning issues
+- The eval harness pushing metrics to Cloud Monitoring means production monitoring and eval quality tracking share a single dashboard - an on-call engineer sees the same accuracy metrics the engineering team sees in eval

@@ -26,7 +26,7 @@ backend/
         └── state.py         # InvestigationState (imports all of the above)
 ```
 
-All schemas use `model_config = ConfigDict(extra="forbid")` by default — unexpected fields are caught immediately. The single exception is `IncidentTrigger`, which uses `extra="ignore"` because it receives raw alert payloads from external monitoring systems that may include arbitrary metadata.
+All schemas use `model_config = ConfigDict(extra="forbid")` by default - unexpected fields are caught immediately. The single exception is `IncidentTrigger`, which uses `extra="ignore"` because it receives raw alert payloads from external monitoring systems that may include arbitrary metadata.
 
 ---
 
@@ -270,7 +270,7 @@ class KnowledgeResult(BaseModel):
     relevance_score: float       # 0.0–1.0, cosine similarity from pgvector
 
 class SimilarIncident(BaseModel):
-    """Phase 2 — populated when incident memory is implemented."""
+    """Phase 2 - populated when incident memory is implemented."""
     model_config = ConfigDict(extra="forbid")
     incident_id: str
     incident_type: str
@@ -348,7 +348,7 @@ class SynthesisOutput(BaseModel):
     investigation_incomplete: bool = False  # True if budget was exhausted
     requires_escalation: bool = False
     escalation_reason: str | None = None
-    # Phase 2 — schema defined now; populated in Phase 2 implementation
+    # Phase 2 - schema defined now; populated in Phase 2 implementation
     incident_memory_record: "IncidentMemoryRecord | None" = None
 
 class IncidentMemoryRecord(BaseModel):
@@ -602,7 +602,7 @@ Two vector collections, both in Cloud SQL (pgvector extension), both using 768-d
 | Documents | `documents` | RAG over runbooks, postmortems, architecture docs | Phase 1 |
 | Incident memory | `incident_memory` | Retrieve similar past investigations | Phase 2 |
 
-**Embedding model:** `text-embedding-004` via Vertex AI. Output dimension: 768. This must be consistent across all ingestion and query calls — mixing embedding models on the same collection produces meaningless similarity scores.
+**Embedding model:** `text-embedding-004` via Vertex AI. Output dimension: 768. This must be consistent across all ingestion and query calls - mixing embedding models on the same collection produces meaningless similarity scores.
 
 **Index type:** IVFFlat with `lists = 10` for small corpora (< 1,000 vectors). IVFFlat requires a training phase (`ANALYZE`) after the first batch of vectors is loaded. Rule of thumb: `lists = sqrt(row_count)`, recalculate and rebuild the index at 10x data growth.
 
@@ -627,7 +627,7 @@ LIMIT 5;
 
 ### 1. Database schema (Cloud SQL): Alembic
 
-All migrations in `infrastructure/migrations/`. Never modify the database directly — all changes go through a migration script.
+All migrations in `infrastructure/migrations/`. Never modify the database directly - all changes go through a migration script.
 
 Phase 1 includes the `incident_memory` table DDL (above). It exists but is empty until Phase 2 activates the write path. No migration needed at the Phase 1 → Phase 2 boundary for this table.
 
@@ -700,7 +700,7 @@ Three decisions are embedded here that you should consciously own:
 
 **2. IVFFlat over HNSW for pgvector indexes**
 
-IVFFlat is simpler to configure and query time is fast enough at small corpus sizes (< 10,000 vectors). HNSW offers better query time at scale but uses significantly more memory (approximately 8 bytes × dimension × rows). For the Orion Commerce corpus (15–20 documents in Phase 1, hundreds in Phase 2), IVFFlat is the right starting point. The index type can be changed without a schema migration — drop and recreate.
+IVFFlat is simpler to configure and query time is fast enough at small corpus sizes (< 10,000 vectors). HNSW offers better query time at scale but uses significantly more memory (approximately 8 bytes × dimension × rows). For the Orion Commerce corpus (15–20 documents in Phase 1, hundreds in Phase 2), IVFFlat is the right starting point. The index type can be changed without a schema migration - drop and recreate.
 
 **3. Fixed-width UUIDs for Orion Commerce seed services**
 

@@ -7,7 +7,7 @@
 
 ## Design principle
 
-The evaluation harness is designed before agent logic is written. This is not ceremonial — metrics chosen after implementation will be biased toward what the system already does well. Metrics chosen before implementation describe what the system should do, and failing them is information.
+The evaluation harness is designed before agent logic is written. This is not ceremonial - metrics chosen after implementation will be biased toward what the system already does well. Metrics chosen before implementation describe what the system should do, and failing them is information.
 
 The eval harness must answer one question per run: **is this version of the system better or worse than the previous version?** Everything else follows from that.
 
@@ -85,7 +85,7 @@ async def query_monitoring_fixture(
     return json.loads(fixture_path.read_text())
 ```
 
-This means the agent's LLM reasoning runs for real. Only the external data source is replaced. The Telemetry Agent receives the same JSON it would get from Cloud Monitoring — but the JSON was written by you, with known content, rather than fetched from a live system.
+This means the agent's LLM reasoning runs for real. Only the external data source is replaced. The Telemetry Agent receives the same JSON it would get from Cloud Monitoring - but the JSON was written by you, with known content, rather than fetched from a live system.
 
 ### Running an eval
 
@@ -146,7 +146,7 @@ class IncidentGroundTruth(BaseModel):
     # True only for INC-LR-005 (transient, root cause genuinely uncertain)
 ```
 
-**Example — INC-FD-001:**
+**Example - INC-FD-001:**
 ```json
 {
   "incident_id": "INC-FD-001",
@@ -158,7 +158,7 @@ class IncidentGroundTruth(BaseModel):
   "true_remediation": "Roll back Payments service to version 2.4.0.",
   "required_specialist_calls": ["deployment", "telemetry"],
   "misleading_signals": [
-    "Orders service error rate increased as a downstream effect — Orders is not the root cause",
+    "Orders service error rate increased as a downstream effect - Orders is not the root cause",
     "High thread count in Payments logs is a consequence of the exception, not a resource leak"
   ],
   "expected_authority_level": "L2",
@@ -207,7 +207,7 @@ Report both the strict score (category AND service) and the component scores. Co
 mttfh_seconds = (synthesis_timestamp - investigation_started_at).total_seconds()
 ```
 
-**Nuance:** In eval, LLM latency is real (Gemini API calls take 1–5 seconds each). Wall-clock MTTFH in eval includes this. Production MTTFH may differ based on concurrency and model endpoint latency. Report both the median and p95 — a high p95 reveals incidents that send the Planner into a long investigation loop.
+**Nuance:** In eval, LLM latency is real (Gemini API calls take 1–5 seconds each). Wall-clock MTTFH in eval includes this. Production MTTFH may differ based on concurrency and model endpoint latency. Report both the median and p95 - a high p95 reveals incidents that send the Planner into a long investigation loop.
 
 **Target:** Median < 5 minutes on the synthetic dataset.
 
@@ -244,7 +244,7 @@ def unsupported_claim_rate(validation: ValidationResult, synthesis: SynthesisOut
     return len(validation.unsupported_claims) / total_claims
 ```
 
-This uses the Safety Guard's `ValidationResult.unsupported_claims` output, which means the Safety Guard must run as part of every eval investigation (even if, in the eval, we do not route failures back to the Planner — we record the failure and continue).
+This uses the Safety Guard's `ValidationResult.unsupported_claims` output, which means the Safety Guard must run as part of every eval investigation (even if, in the eval, we do not route failures back to the Planner - we record the failure and continue).
 
 **Target:** < 10% across the dataset.
 
@@ -281,7 +281,7 @@ efficiency_score = 1.0 - (redundant_calls / total_specialist_calls)
 
 A Planner that calls Telemetry three times with the same query is wasting budget. A Planner that calls Telemetry twice with distinct queries (metrics first, then logs) is using it correctly.
 
-**Target:** Tracked and reported. No hard threshold in Phase 1 — used to tune Planner prompts.
+**Target:** Tracked and reported. No hard threshold in Phase 1 - used to tune Planner prompts.
 
 ---
 
@@ -335,7 +335,7 @@ for band, band_scores in bands.items():
     print(f"{band}: accuracy={accuracy:.0%}")
 ```
 
-A well-calibrated Synthesizer should show monotonically increasing accuracy as confidence increases. Miscalibration (high confidence + wrong answer) is more dangerous than low confidence + wrong answer — the former misleads the on-call engineer; the latter prompts them to investigate further.
+A well-calibrated Synthesizer should show monotonically increasing accuracy as confidence increases. Miscalibration (high confidence + wrong answer) is more dangerous than low confidence + wrong answer - the former misleads the on-call engineer; the latter prompts them to investigate further.
 
 **Target:** Accuracy in the high-confidence band ≥ 85%. No incidents with confidence ≥ 90% and `root_cause_correct = False`.
 
@@ -495,7 +495,7 @@ An agent or the full system is considered ready to ship when it passes all of th
 | Root-cause accuracy (full match) | ≥ 75% | Primary success metric from Section 1 |
 | Evidence completeness | ≥ 80% | Hypothesis must be actionable |
 | Unsupported claim rate | < 10% | Safety Guard quality bar |
-| L3 actions without approval | 0 | Hard constraint; no threshold — zero tolerance |
+| L3 actions without approval | 0 | Hard constraint; no threshold - zero tolerance |
 | Required specialist call rate | ≥ 90% | Planner must not skip critical investigation steps |
 | Confidence calibration | Accuracy ≥ 85% in high-confidence band | Miscalibration is actively dangerous |
 | Inappropriate escalations (easy/medium) | 0 | The system must not give up on solvable incidents |
@@ -535,7 +535,7 @@ class ComparisonReport(BaseModel):
         ...
 ```
 
-A PR that improves root-cause accuracy by 5% but increases token cost by 20% is a tradeoff, not a clean improvement — the comparison report makes this visible rather than hiding it in aggregate numbers.
+A PR that improves root-cause accuracy by 5% but increases token cost by 20% is a tradeoff, not a clean improvement - the comparison report makes this visible rather than hiding it in aggregate numbers.
 
 **Regression threshold:** Flag any metric that degrades by more than 5 percentage points relative to baseline. Alert on any hard gate that was previously passing and is now failing.
 
@@ -557,7 +557,7 @@ When Phase 2 is implemented (incident memory write-back to Cloud SQL + pgvector)
 
 4. **Expected finding:** Improvement should concentrate on incidents that closely match a past investigation (same family, same affected service). Novel incident families or unusual configurations should show no improvement and no degradation.
 
-**What to guard against:** Engineering memory could make the system confidently wrong — if a past investigation had an incorrect root cause and is retrieved as similar, it could bias the Synthesizer. The eval for Phase 2 must include at least 2 "trap" incidents where the most similar past incident had a different root cause, to test that the Synthesizer weights current evidence over historical patterns.
+**What to guard against:** Engineering memory could make the system confidently wrong - if a past investigation had an incorrect root cause and is retrieved as similar, it could bias the Synthesizer. The eval for Phase 2 must include at least 2 "trap" incidents where the most similar past incident had a different root cause, to test that the Synthesizer weights current evidence over historical patterns.
 
 ---
 

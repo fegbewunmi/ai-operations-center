@@ -1,6 +1,6 @@
 # Deployment
 
-*Status: Not started. GCP deployment walkthrough — to be written as we execute each step, not before.*
+*Status: Not started. GCP deployment walkthrough - to be written as we execute each step, not before.*
 
 ---
 
@@ -23,7 +23,7 @@
 - Container build and push (Artifact Registry)
 - CI/CD pipeline (Cloud Build or GitHub Actions)
 - Environment promotion (dev → staging → production)
-- Observability stack setup (TBD — see open decision below)
+- Observability stack setup (TBD - see open decision below)
 
 ---
 

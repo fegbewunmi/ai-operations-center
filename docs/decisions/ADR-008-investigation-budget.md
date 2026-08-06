@@ -15,10 +15,10 @@ The Planner runs an iterative investigation loop. The loop must terminate. The q
 
 **Option A: Hard iteration count (e.g., max 5 loops)**
 - Pros: Simple; easy to explain; predictable
-- Cons: "Counted to 5" is an operational constraint, not a planning concept. A simple incident that reaches high confidence after 2 iterations still runs to 5. A complex incident that needs 7 iterations is cut short at 5 regardless of evidence quality. The system does not express why it stopped — it just stopped. In an interview, "the system stops after 5 iterations" is an engineering simplification, not a design decision.
+- Cons: "Counted to 5" is an operational constraint, not a planning concept. A simple incident that reaches high confidence after 2 iterations still runs to 5. A complex incident that needs 7 iterations is cut short at 5 regardless of evidence quality. The system does not express why it stopped - it just stopped. In an interview, "the system stops after 5 iterations" is an engineering simplification, not a design decision.
 
 **Option B: Multi-dimensional investigation budget (selected)**
-- Model the investigation as consuming a finite budget across multiple dimensions: iterations, tool calls, tokens, and wall-clock latency. The Planner consults remaining budget at each decision point. Additionally, the Planner stops early if its working confidence exceeds a threshold — regardless of remaining budget.
+- Model the investigation as consuming a finite budget across multiple dimensions: iterations, tool calls, tokens, and wall-clock latency. The Planner consults remaining budget at each decision point. Additionally, the Planner stops early if its working confidence exceeds a threshold - regardless of remaining budget.
 - Pros: The system can express "investigation budget exhausted" as a meaningful operational concept. Early stopping on confidence reduces cost on simple incidents. Each budget dimension corresponds to a real operational constraint: iterations (LLM cost), tool calls (external API cost), tokens (context window and cost), latency (SLA).
 - Cons: More configuration parameters; requires testing to find appropriate defaults for each incident family.
 
@@ -56,8 +56,8 @@ class InvestigationBudget(BaseModel):
 
 ## Consequences
 
-- Budget consumption is tracked per investigation and reported in `SynthesisOutput` — the eval harness uses this for cost-per-investigation measurement
+- Budget consumption is tracked per investigation and reported in `SynthesisOutput` - the eval harness uses this for cost-per-investigation measurement
 - The Planner prompt must explicitly reason about remaining budget, not just about evidence quality
-- Budget parameters are configuration, not constants — different incident severity levels could use different budgets (P1 incidents might get a higher `max_tokens` allowance)
+- Budget parameters are configuration, not constants - different incident severity levels could use different budgets (P1 incidents might get a higher `max_tokens` allowance)
 - Early stopping on confidence requires the Planner to maintain a numerical confidence estimate throughout the loop, not just at the end
 - The eval harness should measure budget utilization distribution across incident families (expected: failed-deployment uses fewer iterations than resource-leak)

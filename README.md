@@ -8,9 +8,9 @@ Built to demonstrate production-grade multi-agent system design on Google Cloud 
 
 ## What this system does
 
-When a production incident occurs, on-call engineers spend 15–45 minutes manually correlating logs, metrics, deployment history, and internal documentation before forming a root-cause hypothesis. This system automates that correlation loop, delivering a structured, evidence-backed hypothesis in under 5 minutes — so the engineer's time goes to judgment and action, not data gathering.
+When a production incident occurs, on-call engineers spend 15–45 minutes manually correlating logs, metrics, deployment history, and internal documentation before forming a root-cause hypothesis. This system automates that correlation loop, delivering a structured, evidence-backed hypothesis in under 5 minutes - so the engineer's time goes to judgment and action, not data gathering.
 
-**Customer environment:** Orion Commerce — a synthetic mid-size e-commerce platform with services: API Gateway, Orders, Payments, Inventory, Notifications, User/Auth.
+**Customer environment:** Orion Commerce - a synthetic mid-size e-commerce platform with services: API Gateway, Orders, Payments, Inventory, Notifications, User/Auth.
 
 ---
 
@@ -31,7 +31,7 @@ When a production incident occurs, on-call engineers spend 15–45 minutes manua
 │  Service Catalog (Cloud SQL)                        │
 ├─────────────────────────────────────────────────────┤
 │                  Infrastructure                     │
-│  Google Cloud Platform — Cloud Run · Cloud SQL      │
+│  Google Cloud Platform - Cloud Run · Cloud SQL      │
 │  Vertex AI · Secret Manager · Cloud Storage         │
 └─────────────────────────────────────────────────────┘
 ```
@@ -79,17 +79,17 @@ When a production incident occurs, on-call engineers spend 15–45 minutes manua
 | Vector search | pgvector (on Cloud SQL) | RAG over runbooks/postmortems; Phase 2 incident memory |
 | Deployment | Cloud Run | Serverless; scales to zero; suits terminate-checkpoint-resume approval pattern |
 | Secrets | Google Secret Manager | GCP-native secrets management |
-| Observability | TBD — see [ADR in progress] | Evaluating Grafana+Prometheus vs. Datadog |
+| Observability | TBD - see [ADR in progress] | Evaluating Grafana+Prometheus vs. Datadog |
 
 ---
 
 ## Project phases
 
-**Phase 1 — Core investigation loop (current)**
+**Phase 1 - Core investigation loop (current)**
 Read-only investigation across three incident families: failed deployment, latency regression, resource leak. Full agent graph, eval harness, synthetic Orion Commerce environment.
 
-**Phase 2 — Engineering memory**
+**Phase 2 - Engineering memory**
 Write completed investigations to Cloud SQL + pgvector. Knowledge Agent retrieves similar past incidents. Eval compares accuracy with/without memory.
 
-**Phase 3 — Action execution**
+**Phase 3 - Action execution**
 Level 2 and Level 3 actions with human-approval workflow. Jira, Slack, PagerDuty integration.

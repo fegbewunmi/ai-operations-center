@@ -15,10 +15,10 @@ The original 8-agent sketch included separate Monitoring and Logs agents. These 
 
 **Option A: Separate Monitoring Agent and Logs Agent**
 - Pros: Cleaner single responsibility per agent; smaller individual prompt surfaces; can be parallelized
-- Cons: Both agents query time-indexed data stores using the same pattern (query scope + time window → structured data). The Planner must coordinate two agents where one would serve, increasing round-trips. The agents would frequently need to be called together on the same service and time window — which turns a logical unit of work into two network calls. The reasoning patterns overlap heavily (both involve anomaly detection and summarization over a time window).
+- Cons: Both agents query time-indexed data stores using the same pattern (query scope + time window → structured data). The Planner must coordinate two agents where one would serve, increasing round-trips. The agents would frequently need to be called together on the same service and time window - which turns a logical unit of work into two network calls. The reasoning patterns overlap heavily (both involve anomaly detection and summarization over a time window).
 
 **Option B: Single Telemetry Agent (selected)**
-- Pros: One call covers the time-correlated evidence a specialist investigation requires. The Planner specifies `focus` to avoid over-fetching. Tool interfaces are internally distinct (metrics API vs. logging API vs. traces API) but the agent's reasoning over them is coherent — all three are asking "what was this service doing during this time window?"
+- Pros: One call covers the time-correlated evidence a specialist investigation requires. The Planner specifies `focus` to avoid over-fetching. Tool interfaces are internally distinct (metrics API vs. logging API vs. traces API) but the agent's reasoning over them is coherent - all three are asking "what was this service doing during this time window?"
 - Cons: The agent's prompt covers three tool sets; if the prompts for metrics reasoning and log pattern recognition diverge significantly, one agent becomes harder to tune without affecting the other. Splitting becomes necessary if this happens.
 
 ---
@@ -34,6 +34,6 @@ The merge point is monitored in the eval harness: if Telemetry Agent tool select
 ## Consequences
 
 - Saves one Planner round-trip per iteration for the common case where both metrics and logs are needed
-- Agent prompt covers multiple tool sets — this is the primary risk and must be validated in eval
-- Future split along the `focus` field is possible without changing caller interfaces — the seam is already present in the schema
+- Agent prompt covers multiple tool sets - this is the primary risk and must be validated in eval
+- Future split along the `focus` field is possible without changing caller interfaces - the seam is already present in the schema
 - Traces are included in the agent definition (Phase 2 implementation) so the interface does not change when traces are added

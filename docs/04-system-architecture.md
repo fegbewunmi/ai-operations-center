@@ -41,13 +41,13 @@ Planner ◄───────────────────────
 
 **Key routing mechanics in LangGraph:**
 
-A conditional edge routing function returns a string (the next node name) — it cannot pass parameters. The Planner communicates its decision to the next node by writing a `planner_decision` field to shared state before the edge fires. Specialists read their typed query from `state["planner_decision"].query`. This is why `planner_decision` is a first-class field in `InvestigationState`.
+A conditional edge routing function returns a string (the next node name) - it cannot pass parameters. The Planner communicates its decision to the next node by writing a `planner_decision` field to shared state before the edge fires. Specialists read their typed query from `state["planner_decision"].query`. This is why `planner_decision` is a first-class field in `InvestigationState`.
 
 After any specialist runs, it returns to the Planner via an unconditional edge. The Planner then sees the updated state (including the new findings) and makes its next decision.
 
 ---
 
-## Graph definition (structure — not agent logic)
+## Graph definition (structure - not agent logic)
 
 ```python
 from langgraph.graph import StateGraph, START, END
@@ -123,7 +123,7 @@ def route_from_safety_guard(state: InvestigationState) -> str:
 
 ## Shared state: InvestigationState
 
-Every node reads from and writes to this TypedDict. LangGraph merges node return values into state — nodes only return the fields they update.
+Every node reads from and writes to this TypedDict. LangGraph merges node return values into state - nodes only return the fields they update.
 
 Fields annotated with `operator.add` use list concatenation as the merge operation (append, not overwrite). This allows the same specialist to be called multiple times without losing earlier findings.
 
@@ -170,7 +170,7 @@ class InvestigationState(TypedDict):
     error_log: Annotated[list[AgentError], operator.add]
 ```
 
-**State update example — Telemetry Agent returning findings:**
+**State update example - Telemetry Agent returning findings:**
 
 ```python
 # Telemetry node returns only the fields it touches.
@@ -220,7 +220,7 @@ class PlannerDecision(BaseModel):
     action: Literal["invoke", "synthesize", "escalate"]
     agent: Literal["telemetry", "deployment", "knowledge"] | None = None
     query: AgentQuery | None = None
-    reason: str   # why the Planner made this decision — logged for eval and debugging
+    reason: str   # why the Planner made this decision - logged for eval and debugging
 ```
 
 The `reason` field is not cosmetic. It is the primary debugging artifact when the Planner makes a bad decision (wrong specialist, redundant query, premature synthesis). The eval harness should record and analyze Planner reasoning logs.
@@ -231,7 +231,7 @@ The `reason` field is not cosmetic. It is the primary debugging artifact when th
 
 LangGraph checkpoints the full `InvestigationState` after every node execution automatically, given a configured checkpointer.
 
-**Checkpointer:** `langgraph.checkpoint.postgres.PostgresSaver` — checkpoints stored in Cloud SQL.
+**Checkpointer:** `langgraph.checkpoint.postgres.PostgresSaver` - checkpoints stored in Cloud SQL.
 
 **Thread ID = investigation_id:** Every investigation has a unique `investigation_id` (UUID). This is passed as `config={"configurable": {"thread_id": investigation_id}}` when invoking the graph. All checkpoints for that investigation are scoped to that thread.
 
@@ -251,7 +251,7 @@ graph.invoke(
 )
 ```
 
-**Checkpoint retention:** Checkpoints are retained for the duration of the investigation plus 30 days (configurable). They are the audit trail — every state transition is recoverable. The `error_log` field in state captures agent errors; the checkpoint history captures everything else.
+**Checkpoint retention:** Checkpoints are retained for the duration of the investigation plus 30 days (configurable). They are the audit trail - every state transition is recoverable. The `error_log` field in state captures agent errors; the checkpoint history captures everything else.
 
 ---
 
@@ -284,7 +284,7 @@ return {
 
 The Planner sees the degraded result and reasons about it: can it proceed with other specialists, or is the missing data critical enough to escalate?
 
-**Judgment call embedded here:** I've designed the Planner to receive degraded results and decide — rather than having the specialist fail loudly and halt the graph. This means the Planner's prompt must handle the case where `telemetry_findings[-1].error == "tool_failure"` and reason about what to do. This is the right call for production resilience but adds complexity to Planner prompt engineering.
+**Judgment call embedded here:** I've designed the Planner to receive degraded results and decide - rather than having the specialist fail loudly and halt the graph. This means the Planner's prompt must handle the case where `telemetry_findings[-1].error == "tool_failure"` and reason about what to do. This is the right call for production resilience but adds complexity to Planner prompt engineering.
 
 ### LLM refusal or malformed output
 
@@ -299,7 +299,7 @@ The Planner checks `budget.iterations_remaining` and `budget.tool_calls_remainin
 
 ### Unrecoverable state
 
-If the Planner itself fails (LLM error, state corruption), the exception propagates and LangGraph marks the thread as failed. The last successful checkpoint is preserved. Recovery requires manual intervention — the FastAPI layer returns a 500 with the `investigation_id` so the operator knows which thread failed. **This is not automatically retried** — a failed Planner iteration may have consumed budget; retrying blindly could loop on the same failure.
+If the Planner itself fails (LLM error, state corruption), the exception propagates and LangGraph marks the thread as failed. The last successful checkpoint is preserved. Recovery requires manual intervention - the FastAPI layer returns a 500 with the `investigation_id` so the operator knows which thread failed. **This is not automatically retried** - a failed Planner iteration may have consumed budget; retrying blindly could loop on the same failure.
 
 ---
 
@@ -309,7 +309,7 @@ Each investigation is an independent LangGraph thread (`thread_id = investigatio
 
 There is no global mutable state in the agent code. Service Catalog queries are read-only SQL. Cloud Monitoring and Logging queries are read-only API calls scoped to the service and time window in the query.
 
-Concurrent investigations do not interact. On Cloud Run, each request is independently invoked and may run in the same container instance or a new one — this is irrelevant because state is always loaded from the Postgres checkpointer at invocation start.
+Concurrent investigations do not interact. On Cloud Run, each request is independently invoked and may run in the same container instance or a new one - this is irrelevant because state is always loaded from the Postgres checkpointer at invocation start.
 
 ---
 
@@ -385,6 +385,6 @@ Status is written to Cloud SQL by each major graph transition (not read from the
 12. On-call engineer reviews SynthesisOutput at GET /investigations/{id}/findings
 13. POST /investigations/{id}/approvals/{approval_id} {approved: true}
 14. FastAPI resumes graph from checkpoint.
-15. Response Agent executes rollback command (Phase 3 — proposed only in Phase 1).
+15. Response Agent executes rollback command (Phase 3 - proposed only in Phase 1).
 16. Graph completes.
 ```

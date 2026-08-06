@@ -1,4 +1,4 @@
-# Vision — Problem Framing
+# Vision - Problem Framing
 
 *Status: Locked. Last updated: 2026-08-06.*
 
@@ -14,7 +14,7 @@ The output is not a finished fix. It is a structured, evidence-backed hypothesis
 
 ## Customer environment
 
-**Orion Commerce** — a synthetic mid-size e-commerce platform.
+**Orion Commerce** - a synthetic mid-size e-commerce platform.
 
 | Service | Role |
 |---|---|
@@ -56,7 +56,7 @@ Three incident families. Each tests distinct reasoning patterns.
 ## What a human on-call engineer does today
 
 1. Receives alert (PagerDuty or Slack)
-2. Opens metrics dashboard — identifies affected service and when the anomaly started
+2. Opens metrics dashboard - identifies affected service and when the anomaly started
 3. Checks deployment history for changes near the anomaly onset
 4. Searches logs for exceptions, volume changes, new error patterns
 5. Cross-references known runbooks and past postmortems (rarely, under time pressure)
@@ -67,7 +67,7 @@ Three incident families. Each tests distinct reasoning patterns.
 
 - Steps 2–5 are mechanical correlation across 3–4 systems with no shared interface
 - The same correlation logic repeats on every incident regardless of type
-- Institutional knowledge (runbooks, postmortems) is rarely consulted under pressure — it is slow to find and slow to read
+- Institutional knowledge (runbooks, postmortems) is rarely consulted under pressure - it is slow to find and slow to read
 - Evidence is not systematically documented; the hypothesis exists only in the engineer's head until the postmortem
 
 ---
@@ -87,9 +87,9 @@ Three incident families. Each tests distinct reasoning patterns.
 
 ## What this system is not
 
-- Not a replacement for the on-call engineer — it removes the data-gathering toil, not the judgment
-- Not a general-purpose incident responder — Version 1 handles three specific incident families
-- Not an autonomous remediation system — Level 3 actions require human approval
+- Not a replacement for the on-call engineer - it removes the data-gathering toil, not the judgment
+- Not a general-purpose incident responder - Version 1 handles three specific incident families
+- Not an autonomous remediation system - Level 3 actions require human approval
 
 ---
 

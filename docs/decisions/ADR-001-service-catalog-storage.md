@@ -17,7 +17,7 @@ Service ownership records (team, Slack channel, PagerDuty rotation, runbook URL)
 
 **Option A: Store topology in the Knowledge Agent's RAG corpus (architecture documents)**
 - Pros: No additional data store; topology is co-located with architecture documentation
-- Cons: The Planner receives topology as prose text, not structured data. Dependency traversal becomes an LLM interpretation task, which is non-deterministic and can hallucinate edges. A graph traversal query ("what services does Orders depend on?") should not require LLM reasoning — it is a lookup.
+- Cons: The Planner receives topology as prose text, not structured data. Dependency traversal becomes an LLM interpretation task, which is non-deterministic and can hallucinate edges. A graph traversal query ("what services does Orders depend on?") should not require LLM reasoning - it is a lookup.
 
 **Option B: Neo4j or a dedicated graph database**
 - Pros: Native graph queries; expressive traversal language
@@ -50,5 +50,5 @@ Architecture documents describing the system (prose) remain in the Knowledge Age
 
 - Topology is queryable deterministically; no hallucination risk on dependency edges
 - Adding a new service requires a database record, not a document update
-- Service Catalog tool is shared across Planner, Knowledge Agent, and Response Agent — changes to the schema affect multiple callers
+- Service Catalog tool is shared across Planner, Knowledge Agent, and Response Agent - changes to the schema affect multiple callers
 - Recursive CTE queries required for multi-hop traversal (manageable at this scale; revisit if topology exceeds 50 services)

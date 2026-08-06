@@ -1,4 +1,4 @@
-# AI Operations Center — Architecture Design Document
+# AI Operations Center - Architecture Design Document
 
 *Version 1.0 · 2026-08-06*
 *Customer environment: Orion Commerce (synthetic)*
@@ -15,16 +15,16 @@ The output is not a finished fix. It is a structured, evidence-backed hypothesis
 
 ### Customer environment
 
-Orion Commerce — a synthetic mid-size e-commerce platform. All runbooks, postmortems, deployment records, ownership data, and incident tickets belong to this environment.
+Orion Commerce - a synthetic mid-size e-commerce platform. All runbooks, postmortems, deployment records, ownership data, and incident tickets belong to this environment.
 
 | Service | Role | Team | Calls |
 |---|---|---|---|
 | API Gateway | External entry point; routes all traffic | Platform | Orders, User/Auth |
 | Orders | Order lifecycle management | Commerce | Payments (sync), Inventory (async), Notifications (async) |
 | Payments | Payment processing | Payments | External payment provider |
-| Inventory | Stock tracking; eventually consistent | Commerce | — |
-| Notifications | Email/SMS dispatch; non-critical path | Platform | — |
-| User/Auth | Authentication and user profiles | Security | — |
+| Inventory | Stock tracking; eventually consistent | Commerce | - |
+| Notifications | Email/SMS dispatch; non-critical path | Platform | - |
+| User/Auth | Authentication and user profiles | Security | - |
 
 ### Incident families (Version 1)
 
@@ -37,11 +37,11 @@ Orion Commerce — a synthetic mid-size e-commerce platform. All runbooks, postm
 ### What a human on-call engineer does today
 
 1. Receives alert (PagerDuty or Slack)
-2. Opens metrics dashboard — identifies affected service and anomaly onset time
+2. Opens metrics dashboard - identifies affected service and anomaly onset time
 3. Checks deployment history for changes near onset
 4. Searches logs for exceptions, volume changes, new error patterns
 5. Cross-references runbooks and past postmortems (rarely, under time pressure)
-6. Forms a root-cause hypothesis — typically after 15–45 minutes of manual correlation
+6. Forms a root-cause hypothesis - typically after 15–45 minutes of manual correlation
 7. Recommends or executes remediation; writes postmortem hours later
 
 ### Where the toil is
@@ -49,7 +49,7 @@ Orion Commerce — a synthetic mid-size e-commerce platform. All runbooks, postm
 - Steps 2–5 are mechanical correlation across 3–4 systems with no shared interface
 - The same correlation logic repeats on every incident regardless of type
 - Institutional knowledge (runbooks, postmortems) is rarely consulted under pressure
-- Evidence is not systematically documented — the hypothesis lives in the engineer's head until the postmortem
+- Evidence is not systematically documented - the hypothesis lives in the engineer's head until the postmortem
 
 ### Success metrics
 
@@ -64,9 +64,9 @@ Orion Commerce — a synthetic mid-size e-commerce platform. All runbooks, postm
 
 ### What this system is not
 
-- Not a replacement for the on-call engineer — it removes data-gathering toil, not judgment
-- Not a general-purpose incident responder — Version 1 handles three specific incident families
-- Not an autonomous remediation system — Level 3 actions require human approval
+- Not a replacement for the on-call engineer - it removes data-gathering toil, not judgment
+- Not a general-purpose incident responder - Version 1 handles three specific incident families
+- Not an autonomous remediation system - Level 3 actions require human approval
 
 ---
 
@@ -75,7 +75,7 @@ Orion Commerce — a synthetic mid-size e-commerce platform. All runbooks, postm
 ### Design principles
 
 1. Each agent has one clearly stateable single responsibility. If the description requires "and," it is probably two agents.
-2. Agents reasoning about different domains have different tools and different failure modes — those should be separate.
+2. Agents reasoning about different domains have different tools and different failure modes - those should be separate.
 3. The coordination cost of every boundary must be justified by the benefit.
 4. Structured operational data (topology, ownership) is a tool, not an agent. Tools do not invoke LLMs.
 
@@ -83,7 +83,7 @@ Orion Commerce — a synthetic mid-size e-commerce platform. All runbooks, postm
 
 | # | Agent | Single responsibility |
 |---|---|---|
-| 1 | Planner | Controls the investigation loop — decides what to investigate next and when evidence is sufficient |
+| 1 | Planner | Controls the investigation loop - decides what to investigate next and when evidence is sufficient |
 | 2 | Telemetry Agent | Queries and interprets metrics, logs, and traces for a specific service and time window |
 | 3 | Deployment Agent | Retrieves and analyzes deployment history and config changes near the incident onset |
 | 4 | Knowledge Agent | Retrieves relevant runbooks, postmortems, and architecture docs via RAG |
@@ -105,11 +105,11 @@ Capabilities: `lookup_owner`, `get_dependencies`, `get_dependents`, `get_blast_r
 
 | Property | Detail |
 |---|---|
-| **Single responsibility** | Control the investigation loop — decide what information is missing, which specialist to invoke, and when to synthesize |
+| **Single responsibility** | Control the investigation loop - decide what information is missing, which specialist to invoke, and when to synthesize |
 | **Inputs** | `IncidentTrigger` on first call; updated `InvestigationState` on each subsequent iteration; `InvestigationBudget` |
 | **Outputs** | `PlannerDecision`: one of `invoke {agent, query}` · `synthesize` · `escalate {reason}` |
 | **Why separate** | The only node that sees the full state and decides what happens next. Mixing orchestration with data gathering or synthesis makes all three functions harder to test and explain |
-| **Coordination cost** | Every specialist result routes back through the Planner — one additional LLM call per iteration. Justified because the Planner can cut short dead-end branches; a fixed pipeline cannot |
+| **Coordination cost** | Every specialist result routes back through the Planner - one additional LLM call per iteration. Justified because the Planner can cut short dead-end branches; a fixed pipeline cannot |
 
 **Loop termination (evaluated in order):**
 
@@ -142,7 +142,7 @@ Capabilities: `lookup_owner`, `get_dependencies`, `get_dependents`, `get_blast_r
 | **Inputs** | `service_name`, `time_window`, `investigation_query` |
 | **Outputs** | `DeploymentFindings`: list of deployments in window, config changes, whether a deployment was within N minutes of onset, rollback availability, LLM summary |
 | **Why separate from Telemetry** | Different tool set (deployment records vs time-series APIs), different reasoning pattern, different failure mode. For failed-deployment incidents, this is called first and often resolves the investigation in 1–2 iterations |
-| **Coordination cost** | Planner should call this first for failed-deployment incident type — a prompt-level heuristic, not a hardcoded graph edge |
+| **Coordination cost** | Planner should call this first for failed-deployment incident type - a prompt-level heuristic, not a hardcoded graph edge |
 
 ---
 
@@ -150,7 +150,7 @@ Capabilities: `lookup_owner`, `get_dependencies`, `get_dependents`, `get_blast_r
 
 | Property | Detail |
 |---|---|
-| **Single responsibility** | Retrieve relevant institutional knowledge — runbooks, postmortems, architecture docs, known error patterns — ranked by relevance to the investigation |
+| **Single responsibility** | Retrieve relevant institutional knowledge - runbooks, postmortems, architecture docs, known error patterns - ranked by relevance to the investigation |
 | **Inputs** | `query`, `service_name` (optional), `document_types` (optional) |
 | **Outputs** | `KnowledgeContext`: ranked document results with excerpts and relevance scores; service ownership via Service Catalog; LLM summary. Phase 2: `SimilarIncidents` from past investigations |
 | **Why separate** | RAG retrieval is architecturally distinct from operational data query. The only agent that improves over time (Phase 2: incident memory). Keeping it isolated means that upgrade is localized |
@@ -167,8 +167,8 @@ Capabilities: `lookup_owner`, `get_dependencies`, `get_dependents`, `get_blast_r
 | **Single responsibility** | Given a complete evidence set, produce ranked root-cause hypotheses with supporting/contradicting evidence, confidence scores, and recommended next actions |
 | **Inputs** | Complete `InvestigationState`: timeline, telemetry findings, deployment findings, knowledge context, service topology |
 | **Outputs** | `SynthesisOutput`: ranked `Hypothesis` list, top hypothesis, investigation summary, incident timeline, escalation flag. Phase 2: `IncidentMemoryRecord` |
-| **Why separate from Planner** | The Planner asks "what should I do next?" The Synthesizer asks "given everything, what happened?" Different reasoning tasks, different prompts. Called exactly once per investigation — not mid-loop |
-| **Coordination cost** | Terminal reasoning node — no round-trips after first call. The Planner must assemble complete state before invoking it |
+| **Why separate from Planner** | The Planner asks "what should I do next?" The Synthesizer asks "given everything, what happened?" Different reasoning tasks, different prompts. Called exactly once per investigation - not mid-loop |
+| **Coordination cost** | Terminal reasoning node - no round-trips after first call. The Planner must assemble complete state before invoking it |
 
 **Hypothesis schema:**
 
@@ -178,7 +178,7 @@ description           str
 root_cause_category   deployment | dependency | resource | configuration | infrastructure | unknown
 affected_service      str
 confidence_pct        float (0–100)
-supporting_evidence   list[str]   — citations to actual findings in state
+supporting_evidence   list[str]   - citations to actual findings in state
 contradicting_evidence list[str]
 recommended_action    str
 authority_level       L1 | L2 | L3
@@ -193,7 +193,7 @@ authority_level       L1 | L2 | L3
 | **Single responsibility** | Format the validated Synthesizer output and dispatch it to external systems appropriate to the incident's authority level |
 | **Inputs** | `SynthesisOutput` (post-validation), `ValidationResult` (must be passed), `ServiceOwnership`, `pending_approvals` |
 | **Outputs** | `DispatchedActions`, `PendingApprovals` (L3 triggers checkpoint), `HumanReadableSummary` |
-| **Why separate from Synthesizer** | Communication is a distinct concern. This agent holds external API credentials and handles retry/failure for Jira, Slack, PagerDuty. Never generates remediation reasoning — that is the Synthesizer's job |
+| **Why separate from Synthesizer** | Communication is a distinct concern. This agent holds external API credentials and handles retry/failure for Jira, Slack, PagerDuty. Never generates remediation reasoning - that is the Synthesizer's job |
 | **Coordination cost** | None in the normal path. For L3 actions: writes `PendingApproval` to Cloud SQL, checkpoints graph state, terminates. Resumes via FastAPI approval endpoint |
 
 **Authority-level dispatch:**
@@ -210,12 +210,12 @@ authority_level       L1 | L2 | L3
 
 | Property | Detail |
 |---|---|
-| **Single responsibility** | Validate that Synthesizer output is evidence-grounded, confidence-calibrated, and proposed actions are within authority level — before dispatch |
+| **Single responsibility** | Validate that Synthesizer output is evidence-grounded, confidence-calibrated, and proposed actions are within authority level - before dispatch |
 | **Position** | Between Synthesizer and Response Agent. Always runs; cannot be bypassed |
 | **Inputs** | `SynthesisOutput`, `InvestigationState` (to verify citations), authority level policy |
 | **Outputs** | `ValidationResult`: `{passed, issues, risk_level, unsupported_claims, confidence_calibration_ok, action_authority_ok}` |
 | **On failure** | Routes to Planner with issues list for additional investigation. If budget exhausted: escalates instead of looping |
-| **Why separate from Synthesizer** | The Synthesizer cannot reliably validate its own grounding. A separate node with explicit validation logic is more reliable and more auditable. Also serves as the authority-level enforcement point — no L3 action leaves the system without passing here |
+| **Why separate from Synthesizer** | The Synthesizer cannot reliably validate its own grounding. A separate node with explicit validation logic is more reliable and more auditable. Also serves as the authority-level enforcement point - no L3 action leaves the system without passing here |
 | **What this is not** | An offline evaluator. This runs on every live investigation. The offline eval harness is a completely separate system |
 
 ---
@@ -259,7 +259,7 @@ graph TD
     AP -->|human approves via FastAPI| RE
 ```
 
-### LangGraph graph definition (structure — not agent logic)
+### LangGraph graph definition (structure - not agent logic)
 
 ```python
 def build_investigation_graph(checkpointer):
@@ -304,7 +304,7 @@ def build_investigation_graph(checkpointer):
 
 ### Shared state: InvestigationState
 
-Every LangGraph node reads from and writes to this TypedDict. Fields annotated `operator.add` use list concatenation as the merge — nodes append, not overwrite.
+Every LangGraph node reads from and writes to this TypedDict. Fields annotated `operator.add` use list concatenation as the merge - nodes append, not overwrite.
 
 ```python
 class InvestigationState(TypedDict):
@@ -362,7 +362,7 @@ Early termination: if `planner_working_confidence ≥ confidence_threshold`, the
 
 ### Checkpointing strategy
 
-**Checkpointer:** `langgraph.checkpoint.postgres.PostgresSaver` — stored in Cloud SQL.
+**Checkpointer:** `langgraph.checkpoint.postgres.PostgresSaver` - stored in Cloud SQL.
 
 **Thread ID = investigation_id.** All checkpoints for an investigation are scoped to that thread. Two concurrent investigations are two separate threads with zero shared state.
 
@@ -385,7 +385,7 @@ graph.invoke(
 | Transient tool failure (timeout, API error) | Retry with exponential backoff (3 attempts, max 10s delay). On exhaustion: return degraded `TelemetryFindings` with `error: "tool_failure"`, log `AgentError`, let Planner decide whether to continue |
 | LLM refusal or malformed output | Return degraded findings with `confidence: 0.0`. Planner decides |
 | Budget exhausted | Planner routes to Synthesizer with `investigation_incomplete: True`. Safety Guard aware |
-| Planner node failure | Exception propagates. Last checkpoint preserved. Not auto-retried — a failed Planner may have consumed budget |
+| Planner node failure | Exception propagates. Last checkpoint preserved. Not auto-retried - a failed Planner may have consumed budget |
 
 ### Investigation isolation
 
@@ -415,7 +415,7 @@ alert_metadata:     dict[str, Any]
 action:   invoke | synthesize | escalate
 agent:    telemetry | deployment | knowledge | None
 query:    TelemetryQuery | DeploymentQuery | KnowledgeQuery | None
-reason:   str   — logged for eval and debugging; always populated
+reason:   str   - logged for eval and debugging; always populated
 ```
 
 **TelemetryFindings** (Telemetry Agent → Planner state):
@@ -428,7 +428,7 @@ resource_utilization:     ResourceUtilization (cpu_pct, memory_pct, connection_c
 error_rate_change_pct:    float | None
 latency_p99_change_pct:   float | None
 summary:                  str
-error:                    str | None   — populated on tool failure
+error:                    str | None   - populated on tool failure
 ```
 
 **DeploymentFindings** (Deployment Agent → Planner state):
@@ -446,7 +446,7 @@ error:                    str | None
 query
 results:               list[KnowledgeResult]   (document_id, type, title, excerpt, relevance_score)
 ownership:             ServiceOwnership | None
-similar_incidents:     list[SimilarIncident]   — empty in Phase 1
+similar_incidents:     list[SimilarIncident]   - empty in Phase 1
 summary:               str
 error:                 str | None
 ```
@@ -456,12 +456,12 @@ error:                 str | None
 incident_id
 investigation_summary:    str
 timeline:                 list[TimelineEvent]
-hypotheses:               list[Hypothesis]   — ranked by confidence_pct descending
+hypotheses:               list[Hypothesis]   - ranked by confidence_pct descending
 top_hypothesis:           Hypothesis
 investigation_incomplete: bool
 requires_escalation:      bool
 escalation_reason:        str | None
-incident_memory_record:   IncidentMemoryRecord | None   — None in Phase 1
+incident_memory_record:   IncidentMemoryRecord | None   - None in Phase 1
 ```
 
 **ValidationResult** (Safety Guard → routing):
@@ -507,10 +507,10 @@ incident_memory       (memory_id, investigation_id, incident_type, affected_serv
 | Concern | Strategy |
 |---|---|
 | Database schema | Alembic migrations in `infrastructure/migrations/` |
-| Inter-agent schemas | Coordinated deploys — single deployment unit; Phase 2 fields present as `Optional = None` in Phase 1 |
+| Inter-agent schemas | Coordinated deploys - single deployment unit; Phase 2 fields present as `Optional = None` in Phase 1 |
 | External API | Versioned paths from day one: `/v1/investigations/...` |
 
-Phase 2 does not require schema migration for Pydantic models. The fields exist — they just start returning values instead of `None`.
+Phase 2 does not require schema migration for Pydantic models. The fields exist - they just start returning values instead of `None`.
 
 ---
 
@@ -526,7 +526,7 @@ The evaluation harness is designed before agent logic is written. Metrics chosen
 
 **What the harness does not test:** Whether tool implementations call real APIs correctly (integration testing), or network failure handling (chaos testing).
 
-**How fixture injection works:** Specialist agents receive their tools via dependency injection. In eval, external API calls (Cloud Monitoring, Cloud Logging, deployment history) are replaced by fixture loaders that return pre-authored JSON. LLM calls run for real against Vertex AI — agent reasoning is not mocked.
+**How fixture injection works:** Specialist agents receive their tools via dependency injection. In eval, external API calls (Cloud Monitoring, Cloud Logging, deployment history) are replaced by fixture loaders that return pre-authored JSON. LLM calls run for real against Vertex AI - agent reasoning is not mocked.
 
 ### Test dataset
 
@@ -536,7 +536,7 @@ The evaluation harness is designed before agent logic is written. Metrics chosen
 |---|---|---|---|
 | INC-FD-001 | Failed deployment | Easy | Error immediately post-deploy, clear stack trace |
 | INC-FD-002 | Failed deployment | Medium | Failure delayed 20 minutes post-deploy |
-| INC-FD-003 | Failed deployment | Hard | Deploy happened but is not the cause — red herring |
+| INC-FD-003 | Failed deployment | Hard | Deploy happened but is not the cause - red herring |
 | INC-FD-004 | Failed deployment | Medium | Multi-service cascade: Payments deploy breaks Orders |
 | INC-FD-005 | Failed deployment | Medium | Rollback recommendation required, not just diagnosis |
 | INC-LR-001 | Latency regression | Easy | Single-hop: Orders → slow DB query |
@@ -572,7 +572,7 @@ The evaluation harness is designed before agent logic is written. Metrics chosen
 | Root-cause accuracy | ≥ 75% |
 | Evidence completeness | ≥ 80% |
 | Unsupported claim rate | < 10% |
-| L3 actions without approval | **0** — zero tolerance |
+| L3 actions without approval | **0** - zero tolerance |
 | Required specialist coverage | ≥ 90% |
 | Confidence calibration | Accuracy ≥ 85% in high-confidence band |
 | Inappropriate escalations (easy/medium) | **0** |
@@ -585,7 +585,7 @@ Root-cause description accuracy and remediation quality require semantic matchin
 
 1. **Baseline:** Run 15-incident eval with `similar_incidents = []` forced in all Knowledge Agent outputs
 2. **Memory-seeded:** Seed `incident_memory` with 30+ historical investigations; re-run same eval
-3. **Measure:** Root-cause accuracy, MTTFH, tool calls — differential between the two runs
+3. **Measure:** Root-cause accuracy, MTTFH, tool calls - differential between the two runs
 4. **Guard:** Include ≥ 2 "trap" incidents where the most similar past incident has a *different* root cause, to test that current evidence outweighs historical patterns
 
 ### Regression detection
@@ -600,7 +600,7 @@ Every eval run produces a stored `EvalResult` (JSON). A comparison report flags 
 
 **Decision:** Cloud Run over GKE or Compute Engine.
 
-Cloud Run is serverless and scales to zero between investigations. This is not just a cost decision — it is an architectural requirement. The human-approval flow for Level 3 actions uses terminate-checkpoint-resume (see Section 4), which requires the graph process to be able to terminate and restart without losing state. A persistent GKE pod waiting for human approval wastes resources and is fragile; Cloud Run terminating and resuming from a Postgres checkpoint is correct.
+Cloud Run is serverless and scales to zero between investigations. This is not just a cost decision - it is an architectural requirement. The human-approval flow for Level 3 actions uses terminate-checkpoint-resume (see Section 4), which requires the graph process to be able to terminate and restart without losing state. A persistent GKE pod waiting for human approval wastes resources and is fragile; Cloud Run terminating and resuming from a Postgres checkpoint is correct.
 
 ### Model access: Vertex AI
 
@@ -619,7 +619,7 @@ One Cloud SQL Postgres instance. pgvector extension for document embeddings and 
 
 ### Secrets: Google Secret Manager
 
-All credentials (Vertex AI service account key, Cloud SQL connection string, Slack webhook URL, Jira API token, PagerDuty integration key) stored in Secret Manager. Cloud Run references secrets as environment variables via the Secret Manager integration — no secrets in container images or environment files.
+All credentials (Vertex AI service account key, Cloud SQL connection string, Slack webhook URL, Jira API token, PagerDuty integration key) stored in Secret Manager. Cloud Run references secrets as environment variables via the Secret Manager integration - no secrets in container images or environment files.
 
 ### Observability: GCP-native via OpenTelemetry
 
@@ -631,7 +631,7 @@ All credentials (Vertex AI service account key, Cloud SQL connection string, Sla
 | Execution traces | Cloud Trace (OpenTelemetry) | Per-investigation flame graph: every LangGraph node as a span, every LLM call as a child span with `gen_ai.*` attributes (tokens, model, latency) |
 | Custom metrics | Cloud Monitoring (custom) | MTTFH, total latency, Planner iterations, tool calls, tokens, estimated cost, Safety Guard trigger rate, escalation outcomes |
 | Logs | Cloud Logging (stdout) | Structured JSON per agent invocation, including `investigation_id`, `agent`, `iteration`, `tokens_used`, `duration_ms` |
-| Eval results | Cloud Monitoring (custom) | Root-cause accuracy, evidence completeness, unsupported claim rate — pushed after each eval run |
+| Eval results | Cloud Monitoring (custom) | Root-cause accuracy, evidence completeness, unsupported claim rate - pushed after each eval run |
 
 One Cloud Monitoring dashboard with four sections: Infrastructure Health · Investigation Execution · LLM Usage and Cost · Evaluation Results.
 
@@ -639,13 +639,13 @@ One Cloud Monitoring dashboard with four sections: Infrastructure Health · Inve
 
 ```
 POST /v1/investigations                          Trigger new investigation
-GET  /v1/investigations/{id}                     Get phase and budget status (Cloud SQL read — no checkpoint load)
+GET  /v1/investigations/{id}                     Get phase and budget status (Cloud SQL read - no checkpoint load)
 GET  /v1/investigations/{id}/findings            Get SynthesisOutput (if complete)
 GET  /v1/investigations/{id}/timeline            Get live timeline (from checkpoint)
 POST /v1/investigations/{id}/approvals/{appr_id} Approve or reject L3 action; resumes graph from checkpoint
 ```
 
-### Deployment sequence (overview — executed step by step, not automated)
+### Deployment sequence (overview - executed step by step, not automated)
 
 ```
 1.  gcloud project create + billing link
@@ -671,12 +671,12 @@ The original sketch described eight roughly equal agents (Planner, Monitoring, L
 | Separate Monitoring and Logs agents | Merged into Telemetry Agent | Coordination cost exceeded separation benefit at this scale. `focus` field preserves the seam for future splitting |
 | "Evaluator Agent" in the live graph | Safety Guard (live) + offline eval harness (separate) | These are fundamentally different jobs with different cadences, stakeholders, and failure modes. Conflating them produces an agent that does neither well |
 | Generic "Planner" that decomposes once | Iterative Planner loop | A one-time plan formed on alert metadata alone cannot pivot when findings contradict expectations |
-| No topology awareness | Service Catalog tool (Cloud SQL) | Enables blast-radius reasoning and upstream/downstream analysis — the Planner can direct investigation intelligently rather than querying everything |
+| No topology awareness | Service Catalog tool (Cloud SQL) | Enables blast-radius reasoning and upstream/downstream analysis - the Planner can direct investigation intelligently rather than querying everything |
 | No ownership concept | ServiceOwnership in Knowledge Agent output + Response Agent dispatch | Makes the system's output actionable: "Owner: Payments Team · Escalation: #payments-oncall · Runbook: payments/checkout.md" |
-| No engineering memory | IncidentMemoryRecord schema defined in Phase 1, implemented in Phase 2 | Cross-incident learning is architecturally significant — the schema must be right from the start even if the write path is deferred |
+| No engineering memory | IncidentMemoryRecord schema defined in Phase 1, implemented in Phase 2 | Cross-incident learning is architecturally significant - the schema must be right from the start even if the write path is deferred |
 | Fictional customer unnamed | Orion Commerce as a full synthetic environment | Every artifact (service names, alerts, Jira tickets, runbooks, dashboards) belongs to one coherent world. Turns a collection of demos into a product story |
 
-The most important change is the Evaluator split. "Evaluator Agent" as a single thing in the live graph is a common design mistake — it suggests the designer did not think carefully about the difference between runtime safety validation and system-level accuracy measurement. Separating them is a short answer in an interview that signals architectural maturity.
+The most important change is the Evaluator split. "Evaluator Agent" as a single thing in the live graph is a common design mistake - it suggests the designer did not think carefully about the difference between runtime safety validation and system-level accuracy measurement. Separating them is a short answer in an interview that signals architectural maturity.
 
 ---
 
@@ -702,6 +702,6 @@ Full ADR text (context, options, consequences) for each decision: `docs/decision
 
 | Phase | Scope | Status |
 |---|---|---|
-| **Phase 1 — Core investigation loop** | Read-only investigation for 3 incident families · Full agent graph · 15-incident eval harness · Orion Commerce synthetic environment · Cloud Monitoring dashboard | In design |
-| **Phase 2 — Engineering memory** | Write completed investigations to Cloud SQL + pgvector · Knowledge Agent retrieves similar past incidents · Eval comparison: with vs. without memory | Planned |
-| **Phase 3 — Action execution** | Level 2 and Level 3 actions fully wired (Jira, Slack, PagerDuty, rollback) · Human approval workflow end-to-end | Planned |
+| **Phase 1 - Core investigation loop** | Read-only investigation for 3 incident families · Full agent graph · 15-incident eval harness · Orion Commerce synthetic environment · Cloud Monitoring dashboard | In design |
+| **Phase 2 - Engineering memory** | Write completed investigations to Cloud SQL + pgvector · Knowledge Agent retrieves similar past incidents · Eval comparison: with vs. without memory | Planned |
+| **Phase 3 - Action execution** | Level 2 and Level 3 actions fully wired (Jira, Slack, PagerDuty, rollback) · Human approval workflow end-to-end | Planned |
