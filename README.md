@@ -42,7 +42,7 @@ The investigation graph is a **LangGraph StateGraph** compiled with an `AsyncPos
 **Separation of concerns:**
 - `planner` - orchestrates, decides what to call next
 - `incident_analysis` - correlates all evidence into ranked hypotheses
-- `synthesizer` - formats hypotheses into human-readable summary
+- `synthesizer` - formats hypotheses into human-readable summary 
 - `safety_guard` - four deterministic checks before any action is dispatched
 - `dispatcher` - pure workflow: POST Slack record, write incident_memory, update status
 
