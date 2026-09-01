@@ -253,16 +253,18 @@ Fully quit and reopen Claude Desktop after editing - it spawns MCP servers once 
 
 ```bash
 # Unit tests - no DB or network needed
-pytest tests/ -v --ignore=tests/test_deployment_node.py --ignore=tests/test_tickets_api.py
+pytest tests/ -v --ignore=tests/test_deployment_node.py --ignore=tests/test_tickets_api.py \
+  --ignore=tests/test_dispatcher_node.py --ignore=tests/test_approval_and_challenge_api.py
 
 # Integration tests - requires Cloud SQL Auth Proxy on :5433
 DATABASE_URL="postgresql+asyncpg://ai_ops_user:PASSWORD@localhost:5433/ai_ops" \
-  pytest tests/test_deployment_node.py tests/test_tickets_api.py -v
+  pytest tests/test_deployment_node.py tests/test_tickets_api.py tests/test_dispatcher_node.py \
+    tests/test_approval_and_challenge_api.py -v
 ```
 
-**46 unit tests** (excluding integration tests that require the Auth Proxy): safety_guard (15), planner (7), synthesizer (6), incident_analysis (5), telemetry (5), knowledge (3), eval/fixtures API (5).
+**66 unit tests** (excluding integration tests that require the Auth Proxy) across safety_guard, planner, synthesizer, incident_analysis, telemetry, knowledge, LLM cost tracking, and the eval/fixtures API.
 
-`test_tickets_api.py` needs the Auth Proxy for the same reason `test_deployment_node.py` does: importing `app.db.session` requires `DATABASE_URL`/`GCP_PROJECT_ID` to be set just to construct `Settings()`, even for the one test case (invalid severity) that never issues a query.
+`test_tickets_api.py`, `test_dispatcher_node.py`, and `test_approval_and_challenge_api.py` need the Auth Proxy for the same reason `test_deployment_node.py` does: importing `app.db.session` requires `DATABASE_URL`/`GCP_PROJECT_ID` to be set just to construct `Settings()`, even though most of their individual tests mock the database or the graph and never issue a real query - `test_dispatcher_node.py`'s one genuinely DB-dependent case (`test_pending_approval_create_and_resolve_against_real_db`) is additionally gated by `@integration` and skips itself if `DATABASE_URL` isn't set.
 
 ---
 
@@ -353,6 +355,7 @@ gcloud run deploy ai-ops-api \
 | [ADR-012](docs/decisions/ADR-012-llm-cost-tracking.md) | Per-node LLM token and cost tracking |
 | [ADR-013](docs/decisions/ADR-013-mcp-server-integration.md) | MCP server as a thin HTTP wrapper; confirm-gated writes instead of the (broken) L3 approval pattern |
 | [ADR-014](docs/decisions/ADR-014-investigation-console-frontend.md) | Investigation console: graph models the investigation not the pipeline, polling over SSE, fixture replay through the real graph, challenge-resume |
+| [ADR-015](docs/decisions/ADR-015-l3-approval-and-challenge-resume-fix.md) | Fixes the L3 approval and challenge-resume dead ends via `interrupt()`/`Command()` - and corrects ADR-004's premise about `interrupt()` on Cloud Run |
 
 ---
 

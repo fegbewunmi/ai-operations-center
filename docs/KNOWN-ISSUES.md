@@ -8,6 +8,14 @@ without re-deriving the root cause.
 
 ## 1. L3 approval resume doesn't actually dispatch anything
 
+**RESOLVED 2026-09-01 — see `docs/decisions/ADR-015-l3-approval-and-challenge-resume-fix.md`.**
+`dispatcher_node` now routes an L3 decision to a dedicated `l3_approval_gate`
+node that pauses via LangGraph's `interrupt()`; `POST /approval` resumes with
+`Command(resume=...)`. The same investigation also surfaced that hypothesis
+"challenge"-resume had an identical dead end via a different code path -
+fixed in the same ADR via `Command(goto="planner", ...)`. Left below for
+history.
+
 **Symptom:** Approving an L3-escalated investigation via
 `POST /v1/investigations/{id}/approval` never causes the recommended action to
 be dispatched. No `DispatchedAction` is created, `incident_memory` is never
@@ -46,6 +54,11 @@ resolve).
 ---
 
 ## 2. `pending_approvals` database table is never written to
+
+**RESOLVED 2026-09-01 — see `docs/decisions/ADR-015-l3-approval-and-challenge-resume-fix.md`.**
+Resolved alongside #1: `dispatcher_node`/`l3_approval_gate_node` now write
+and update real rows, and `GET /{id}/analysis` reads `pending_approvals` from
+this table instead of (now-unused) checkpoint state. Left below for history.
 
 **Symptom:** The `pending_approvals` table (`migrations/versions/0001_initial_schema.py`)
 has no code path that ever inserts into it.
