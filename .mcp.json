@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "trace-incidents": {
+      "command": "/Users/ski/ai-operations/mcp_server/.venv/bin/python",
+      "args": ["/Users/ski/ai-operations/mcp_server/server.py"]
+    }
+  }
+}

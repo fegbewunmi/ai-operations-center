@@ -13,6 +13,21 @@ class DispatchedAction(BaseModel):
     authority_level: Literal["L1", "L2"]
 
 
+class HypothesisFeedback(BaseModel):
+    """
+    Human judgment on a specific hypothesis, captured for usability-test analysis.
+    'challenged' additionally triggers a real planner resume (see
+    submit_hypothesis_feedback in app/api/v1/investigations.py) — accepted/rejected
+    are pure signal capture and do not change investigation state.
+    """
+    model_config = ConfigDict(extra="forbid")
+    hypothesis_id: str
+    verdict: Literal["accepted", "rejected", "challenged"]
+    note: str | None = None
+    submitted_by: str
+    submitted_at: datetime
+
+
 class PendingApproval(BaseModel):
     model_config = ConfigDict(extra="forbid")
     approval_id: str

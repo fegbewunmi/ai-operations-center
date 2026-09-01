@@ -65,8 +65,8 @@ async def deployment_factory(db):
                     deployed_at, deployed_by, status, config_changes,
                     rollback_available, git_commit_sha
                 ) VALUES (
-                    :dep_id::uuid, :service_id::uuid, :version_from, :version_to,
-                    :deployed_at, :deployed_by, :status, :config_changes::jsonb,
+                    :dep_id ::uuid, :service_id ::uuid, :version_from, :version_to,
+                    :deployed_at, :deployed_by, :status, :config_changes ::jsonb,
                     :rollback_available, :git_commit_sha
                 )
             """),
@@ -92,7 +92,61 @@ async def deployment_factory(db):
     # Teardown - remove test deployments
     for dep_id in created_ids:
         await db.execute(
-            text("DELETE FROM deployments WHERE deployment_id = :id::uuid"),
+            text("DELETE FROM deployments WHERE deployment_id = :id ::uuid"),
             {"id": dep_id},
+        )
+    await db.commit()
+
+
+@pytest_asyncio.fixture
+async def investigation_factory(db):
+    """
+    Factory fixture that inserts a real incidents + investigations row pair -
+    needed to satisfy foreign keys like tickets.investigation_id - and cleans
+    both up afterward, along with any tickets created against them.
+    Usage: investigation_id = await investigation_factory()
+    """
+    created: list[tuple[str, str]] = []
+
+    async def _create(phase: str = "complete") -> str:
+        incident_id = str(uuid.uuid4())
+        investigation_id = str(uuid.uuid4())
+        await db.execute(
+            text("""
+                INSERT INTO incidents (
+                    incident_id, alert_name, severity, service_name,
+                    onset_timestamp, description
+                ) VALUES (
+                    :incident_id ::uuid, 'TestAlert', 'P1', 'payments',
+                    NOW(), 'test incident'
+                )
+            """),
+            {"incident_id": incident_id},
+        )
+        await db.execute(
+            text("""
+                INSERT INTO investigations (investigation_id, incident_id, phase)
+                VALUES (:investigation_id ::uuid, :incident_id ::uuid, :phase)
+            """),
+            {"investigation_id": investigation_id, "incident_id": incident_id, "phase": phase},
+        )
+        await db.commit()
+        created.append((incident_id, investigation_id))
+        return investigation_id
+
+    yield _create
+
+    for incident_id, investigation_id in created:
+        await db.execute(
+            text("DELETE FROM tickets WHERE investigation_id = :id ::uuid"),
+            {"id": investigation_id},
+        )
+        await db.execute(
+            text("DELETE FROM investigations WHERE investigation_id = :id ::uuid"),
+            {"id": investigation_id},
+        )
+        await db.execute(
+            text("DELETE FROM incidents WHERE incident_id = :id ::uuid"),
+            {"id": incident_id},
         )
     await db.commit()

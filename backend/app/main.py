@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -8,7 +9,11 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from app.api.v1.eval import router as eval_router
+from app.api.v1.incidents import router as incidents_router
 from app.api.v1.investigations import router as investigations_router
+from app.api.v1.knowledge import router as knowledge_router
+from app.api.v1.tickets import router as tickets_router
 from app.config import settings
 from app.db.session import engine
 from app.graph.graph import build_graph
@@ -48,6 +53,18 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(investigations_router)
+    app.include_router(eval_router)
+    app.include_router(incidents_router)
+    app.include_router(knowledge_router)
+    app.include_router(tickets_router)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.frontend_origin],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/health", tags=["ops"])
     async def health() -> dict:

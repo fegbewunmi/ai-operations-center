@@ -62,6 +62,7 @@ The investigation graph is a **LangGraph StateGraph** compiled with an `AsyncPos
 | Tracing | OpenTelemetry + Cloud Trace | `@traced_node` on every graph node; per-investigation flame graphs |
 | Hosting | Cloud Run | Serverless, scales to zero, VPC connector for Cloud SQL |
 | Secrets | Secret Manager | DB credentials - never in env files or images; LLM auth via ADC/service account |
+| MCP integration | `mcp` SDK (FastMCP, `mcp<2`) | Exposes investigation tools to Claude Desktop/Code over stdio; see [MCP server](#mcp-server) |
 
 ---
 
@@ -135,20 +136,99 @@ curl http://localhost:8080/v1/investigations/INC-001/status
 curl http://localhost:8080/v1/investigations/INC-001/findings
 ```
 
+### Other endpoints
+
+```bash
+# Search the knowledge base directly (runbooks, postmortems, architecture docs, error patterns)
+curl -X POST http://localhost:8080/v1/knowledge/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "database timeout", "document_types": ["runbook"], "limit": 5}'
+
+# Create a ticket for an investigation (Phase 2 - mocked ticketing destination,
+# writes a real row but doesn't call an external system)
+curl -X POST http://localhost:8080/v1/tickets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Payments error rate spike - v2.3.1 rollback needed",
+    "description": "Root cause: v2.3.1 Stripe SDK upgrade",
+    "severity": "P1",
+    "investigation_id": "<investigation_id from above>"
+  }'
+```
+
+---
+
+## MCP server
+
+`mcp_server/` exposes a subset of the investigation API as MCP tools for Claude Desktop, Claude Code, or any other MCP client - so an LLM can pull investigation status, search the knowledge base, and create tickets directly in conversation, without a human working the REST API by hand.
+
+It's a **thin HTTP wrapper**, not a second path into the database - every tool just calls the FastAPI backend above (see `ADR-013`). The backend must already be running for it to do anything.
+
+**Tools:**
+
+| Tool | Wraps | Notes |
+|---|---|---|
+| `get_investigation_status` | `GET /v1/investigations/{id}/status` | Phase, working hypothesis, confidence, budget usage |
+| `search_documents` | `POST /v1/knowledge/search` | Semantic search over runbooks/postmortems/etc |
+| `get_incident_history` | `GET /v1/investigations` | Past investigations, most recent first |
+| `create_ticket` | `POST /v1/tickets` | **Write, confirm-gated** - `confirm=False` (default) previews with no side effect; only `confirm=True` actually creates the ticket |
+
+### Run it
+
+```bash
+cd mcp_server
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt   # add requirements-dev.txt for the MCP Inspector
+
+python server.py                  # runs over stdio; a client spawns this, you don't run it standalone
+```
+
+`BACKEND_URL` env var overrides the default `http://localhost:8080`.
+
+### Try it with the MCP Inspector
+
+```bash
+pip install -r requirements-dev.txt
+mcp dev server.py
+```
+
+Opens a local web UI listing all four tools with a form to call each one and inspect the raw request/response.
+
+### Wire it into Claude Code or Claude Desktop
+
+Claude Code: see the repo-root `.mcp.json`.
+
+Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "trace-incidents": {
+      "command": "/absolute/path/to/mcp_server/.venv/bin/python",
+      "args": ["/absolute/path/to/mcp_server/server.py"]
+    }
+  }
+}
+```
+
+Fully quit and reopen Claude Desktop after editing - it spawns MCP servers once at launch, not per-conversation.
+
 ---
 
 ## Run tests
 
 ```bash
 # Unit tests - no DB or network needed
-pytest tests/ -v --ignore=tests/test_deployment_node.py
+pytest tests/ -v --ignore=tests/test_deployment_node.py --ignore=tests/test_tickets_api.py
 
 # Integration tests - requires Cloud SQL Auth Proxy on :5433
 DATABASE_URL="postgresql+asyncpg://ai_ops_user:PASSWORD@localhost:5433/ai_ops" \
-  pytest tests/test_deployment_node.py -v
+  pytest tests/test_deployment_node.py tests/test_tickets_api.py -v
 ```
 
-**41 unit tests** (excluding deployment integration tests that require the Auth Proxy): safety_guard (15), planner (7), synthesizer (6), incident_analysis (5), telemetry (5), knowledge (3).
+**46 unit tests** (excluding integration tests that require the Auth Proxy): safety_guard (15), planner (7), synthesizer (6), incident_analysis (5), telemetry (5), knowledge (3), eval/fixtures API (5).
+
+`test_tickets_api.py` needs the Auth Proxy for the same reason `test_deployment_node.py` does: importing `app.db.session` requires `DATABASE_URL`/`GCP_PROJECT_ID` to be set just to construct `Settings()`, even for the one test case (invalid severity) that never issues a query.
 
 ---
 
@@ -218,6 +298,7 @@ gcloud run deploy ai-ops-api \
 | [Data Model](docs/06-data-model.md) | Schemas, contracts, versioning strategy |
 | [Evaluation](docs/07-evaluation.md) | Eval harness design, metrics, test dataset |
 | [Deployment](docs/08-deployment.md) | GCP deployment walkthrough, Cloud Run, CI/CD |
+| [Known Issues](docs/KNOWN-ISSUES.md) | Tracked gaps found during development but out of scope for the change that found them |
 
 ### Architecture Decision Records
 
@@ -234,6 +315,8 @@ gcloud run deploy ai-ops-api \
 | [ADR-009](docs/decisions/ADR-009-observability-stack.md) | GCP-native: Cloud Monitoring + Cloud Trace via OpenTelemetry |
 | [ADR-010](docs/decisions/ADR-010-planner-routing-fix.md) | Planner routing bug postmortem: discriminated union, mock mismatch, schema gap |
 | [ADR-011](docs/decisions/ADR-011-knowledge-evidence-pipeline.md) | Knowledge evidence pipeline: retrieval gap vs. taxonomy gap debugging methodology |
+| [ADR-012](docs/decisions/ADR-012-llm-cost-tracking.md) | Per-node LLM token and cost tracking |
+| [ADR-013](docs/decisions/ADR-013-mcp-server-integration.md) | MCP server as a thin HTTP wrapper; confirm-gated writes instead of the (broken) L3 approval pattern |
 
 ---
 
@@ -252,3 +335,4 @@ Key tables in Cloud SQL Postgres 15:
 | `documents` | Knowledge base: 11 docs across runbooks, postmortems, architecture |
 | `incident_memory` | Past investigations with pgvector(768) for RAG retrieval |
 | `checkpoints` | LangGraph state (thread_id, checkpoint JSONB) |
+| `tickets` | Phase 2 mocked ticketing destination - real row, no external call |

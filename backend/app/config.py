@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # App
     environment: str = "development"
     log_level: str = "INFO"
+    frontend_origin: str = "http://localhost:3000"
 
 
 settings = Settings()  # type: ignore[call-arg]
