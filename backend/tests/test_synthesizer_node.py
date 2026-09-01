@@ -65,6 +65,7 @@ def _make_state(analysis_output: AnalysisOutput | None = None) -> dict:
         "validation_result": None,
         "dispatched_actions": [],
         "pending_approvals": [],
+        "human_feedback": [],
         "started_at": datetime.now(timezone.utc),
         "completed_at": None,
         "escalation_reason": None,

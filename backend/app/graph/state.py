@@ -8,7 +8,7 @@ from app.shared.schemas.deployment import DeploymentFindings
 from app.shared.schemas.incident import IncidentTrigger, InvestigationBudget
 from app.shared.schemas.knowledge import KnowledgeContext, ServiceTopology
 from app.shared.schemas.planner import PlannerDecision
-from app.shared.schemas.response import DispatchedAction, PendingApproval
+from app.shared.schemas.response import DispatchedAction, HypothesisFeedback, PendingApproval
 from app.shared.schemas.synthesis import AnalysisOutput, SynthesisOutput
 from app.shared.schemas.telemetry import TelemetryFindings
 from app.shared.schemas.validation import ValidationResult
@@ -41,6 +41,7 @@ class InvestigationState(TypedDict):
     # Response outputs
     dispatched_actions: Annotated[list[DispatchedAction], operator.add]
     pending_approvals: Annotated[list[PendingApproval], operator.add]
+    human_feedback: Annotated[list[HypothesisFeedback], operator.add]
 
     # Token and cost tracking — one entry per node per LLM call
     token_log: Annotated[list[NodeTokenUsage], operator.add]

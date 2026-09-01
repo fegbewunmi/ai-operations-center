@@ -51,6 +51,7 @@ def _make_state(query: str = "payment service deployment rollback runbook") -> d
         "validation_result": None,
         "dispatched_actions": [],
         "pending_approvals": [],
+        "human_feedback": [],
         "started_at": datetime.now(timezone.utc),
         "completed_at": None,
         "escalation_reason": None,

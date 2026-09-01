@@ -149,6 +149,18 @@ def _evidence_summary(state: InvestigationState) -> str:
             parts.append(f"Docs retrieved: {', '.join(top)}")
         parts.append("")
 
+    # Human feedback on previously proposed hypotheses — populated when a hypothesis
+    # is challenged via POST /hypotheses/{id}/feedback, which reopens the investigation
+    # by resuming this node. Surfaced so the re-opened investigation actually
+    # reconsiders in light of the human's pushback rather than repeating itself.
+    feedback = state.get("human_feedback") or []
+    if feedback:
+        parts.append("[Human feedback on prior hypotheses]")
+        for fb in feedback:
+            note = f" — {fb.note}" if fb.note else ""
+            parts.append(f"  {fb.verdict.upper()} hypothesis {fb.hypothesis_id} by {fb.submitted_by}{note}")
+        parts.append("")
+
     return "\n".join(parts) if parts else "No evidence gathered yet."
 
 

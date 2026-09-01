@@ -94,7 +94,7 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
                 text("""
                     UPDATE investigations
                     SET phase = 'complete', completed_at = :completed_at
-                    WHERE investigation_id = :id::uuid
+                    WHERE investigation_id = :id ::uuid
                 """),
                 {"id": investigation_id, "completed_at": completed_at},
             )
@@ -110,8 +110,8 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
                         investigation_duration_secs, tool_invocation_count,
                         embedding_text, embedding
                     ) VALUES (
-                        :investigation_id::uuid, :incident_type, :service_id::uuid,
-                        :onset::timestamptz, :resolution,
+                        :investigation_id ::uuid, :incident_type, :service_id ::uuid,
+                        :onset ::timestamptz, :resolution,
                         :category, :description,
                         :confidence, :remediation,
                         :duration_secs, :tool_calls,
@@ -128,8 +128,8 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
                         investigation_duration_secs, tool_invocation_count,
                         embedding_text
                     ) VALUES (
-                        :investigation_id::uuid, :incident_type, :service_id::uuid,
-                        :onset::timestamptz, :resolution,
+                        :investigation_id ::uuid, :incident_type, :service_id ::uuid,
+                        :onset ::timestamptz, :resolution,
                         :category, :description,
                         :confidence, :remediation,
                         :duration_secs, :tool_calls,

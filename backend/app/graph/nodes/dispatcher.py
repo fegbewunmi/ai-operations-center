@@ -71,11 +71,19 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
         _get_service_id(incident.service_name),
     )
 
+    onset_dt = (
+        incident.onset_timestamp
+        if isinstance(incident.onset_timestamp, datetime)
+        else datetime.fromisoformat(incident.onset_timestamp.replace("Z", "+00:00"))
+    )
+
     params: dict = {
         "investigation_id": investigation_id,
         "incident_type": incident_type,
         "service_id": service_id,
-        "onset": incident.onset_timestamp,
+        # asyncpg binds ::timestamptz params by Python type, not by string parsing —
+        # it requires an actual datetime, not the raw ISO string IncidentTrigger carries.
+        "onset": onset_dt,
         "resolution": completed_at,
         "category": top.root_cause_category,
         "description": top.description,
@@ -92,7 +100,7 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
                 text("""
                     UPDATE investigations
                     SET phase = 'complete', completed_at = :completed_at
-                    WHERE investigation_id = :id::uuid
+                    WHERE investigation_id = :id ::uuid
                 """),
                 {"id": investigation_id, "completed_at": completed_at},
             )
@@ -108,8 +116,8 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
                         investigation_duration_secs, tool_invocation_count,
                         embedding_text, embedding
                     ) VALUES (
-                        :investigation_id::uuid, :incident_type, :service_id::uuid,
-                        :onset::timestamptz, :resolution,
+                        :investigation_id ::uuid, :incident_type, :service_id ::uuid,
+                        :onset ::timestamptz, :resolution,
                         :category, :description,
                         :confidence, :remediation,
                         :duration_secs, :tool_calls,
@@ -126,8 +134,8 @@ async def _write_incident_memory(investigation_id: str, state: InvestigationStat
                         investigation_duration_secs, tool_invocation_count,
                         embedding_text
                     ) VALUES (
-                        :investigation_id::uuid, :incident_type, :service_id::uuid,
-                        :onset::timestamptz, :resolution,
+                        :investigation_id ::uuid, :incident_type, :service_id ::uuid,
+                        :onset ::timestamptz, :resolution,
                         :category, :description,
                         :confidence, :remediation,
                         :duration_secs, :tool_calls,

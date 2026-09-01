@@ -129,6 +129,15 @@ def _build_evidence_block(state: InvestigationState) -> str:
             "",
         ]
 
+    feedback = state.get("human_feedback") or []
+    if feedback:
+        parts.append("HUMAN FEEDBACK ON PRIOR HYPOTHESES:")
+        for fb in feedback:
+            note = f" — {fb.note}" if fb.note else ""
+            parts.append(f"  {fb.verdict.upper()} hypothesis {fb.hypothesis_id} by {fb.submitted_by}{note}")
+        parts.append("  Take this feedback seriously when re-ranking hypotheses.")
+        parts.append("")
+
     return "\n".join(parts)
 
 
