@@ -7,6 +7,7 @@ from app.graph.state import InvestigationState
 # Return types for LangGraph conditional edge functions
 PlannerRoute = Literal["telemetry", "deployment", "knowledge", "incident_analysis", "__end__"]
 GuardRoute = Literal["dispatcher", "planner"]
+DispatcherRoute = Literal["l3_approval_gate", "__end__"]
 
 
 def route_from_planner(state: InvestigationState) -> PlannerRoute:
@@ -53,3 +54,18 @@ def route_from_safety_guard(state: InvestigationState) -> GuardRoute:
     if validation is not None and validation.passed:
         return "dispatcher"
     return "planner"
+
+
+def route_from_dispatcher(state: InvestigationState) -> DispatcherRoute:
+    """
+    Conditional edge after the Action Dispatcher node.
+
+    dispatcher_node sets phase="escalated" (and only that) when the top hypothesis
+    is L3 and needs human approval before it may run - route to a dedicated gate
+    node that pauses via interrupt() rather than reaching a real END, so the
+    checkpoint retains a pending task for POST /approval to resume into. Any other
+    phase means dispatcher already dispatched (or there's nothing to dispatch).
+    """
+    if state.get("phase") == "escalated":
+        return "l3_approval_gate"
+    return END  # type: ignore[return-value]

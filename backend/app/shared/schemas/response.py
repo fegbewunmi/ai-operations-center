@@ -10,7 +10,7 @@ class DispatchedAction(BaseModel):
     external_id: str
     url: str | None = None
     dispatched_at: datetime
-    authority_level: Literal["L1", "L2"]
+    authority_level: Literal["L1", "L2", "L3"]
 
 
 class HypothesisFeedback(BaseModel):

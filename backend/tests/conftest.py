@@ -142,6 +142,10 @@ async def investigation_factory(db):
             {"id": investigation_id},
         )
         await db.execute(
+            text("DELETE FROM pending_approvals WHERE investigation_id = :id ::uuid"),
+            {"id": investigation_id},
+        )
+        await db.execute(
             text("DELETE FROM investigations WHERE investigation_id = :id ::uuid"),
             {"id": investigation_id},
         )

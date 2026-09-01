@@ -5,11 +5,11 @@ from app.graph.nodes.deployment import deployment_node
 from app.graph.nodes.incident_analysis import incident_analysis_node
 from app.graph.nodes.knowledge import knowledge_node
 from app.graph.nodes.planner import planner_node
-from app.graph.nodes.dispatcher import dispatcher_node
+from app.graph.nodes.dispatcher import dispatcher_node, l3_approval_gate_node
 from app.graph.nodes.safety_guard import safety_guard_node
 from app.graph.nodes.synthesizer import synthesizer_node
 from app.graph.nodes.telemetry import telemetry_node
-from app.graph.routing import route_from_planner, route_from_safety_guard
+from app.graph.routing import route_from_dispatcher, route_from_planner, route_from_safety_guard
 from app.graph.state import InvestigationState
 
 
@@ -38,9 +38,11 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
           |           passed /          \\ failed
           |                /            \\
           |          dispatcher        planner (re-plan)
-          |                |
-          +-- escalate --> END
-                           ^
+          |           /      \\
+          |     L1/L2         L3
+          |        |            \\
+          +-- escalate --> END   l3_approval_gate --(interrupt, resume via
+                           ^                          POST /approval)--> END
                            |
                       dispatcher (after dispatching)
     """
@@ -55,6 +57,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
     builder.add_node("synthesizer", synthesizer_node)
     builder.add_node("safety_guard", safety_guard_node)
     builder.add_node("dispatcher", dispatcher_node)
+    builder.add_node("l3_approval_gate", l3_approval_gate_node)
 
     # --- Edges ---
 
@@ -94,8 +97,18 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
         },
     )
 
-    # Action dispatcher terminates the graph
-    builder.add_edge("dispatcher", END)
+    # Dispatcher terminates immediately for L1/L2 (already dispatched); an L3
+    # hypothesis routes to a dedicated gate node that pauses for human approval
+    # instead of dispatcher itself reaching END (see ADR-015).
+    builder.add_conditional_edges(
+        "dispatcher",
+        route_from_dispatcher,
+        {
+            "l3_approval_gate": "l3_approval_gate",
+            END: END,
+        },
+    )
+    builder.add_edge("l3_approval_gate", END)
 
     return builder.compile(checkpointer=checkpointer)
 

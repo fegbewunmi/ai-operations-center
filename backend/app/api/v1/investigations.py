@@ -8,6 +8,7 @@ from typing import Literal
 from unittest.mock import AsyncMock, patch
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from langgraph.types import Command
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -359,11 +360,15 @@ async def submit_approval(
     investigation_id: str,
     body: ApprovalRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Submit a human approval decision for an L3-escalated investigation.
-    On approval, resumes the graph from its saved checkpoint.
+
+    Resumes via graph.ainvoke(Command(resume=...), config) - the graph is genuinely
+    paused inside l3_approval_gate_node's interrupt() call (see dispatcher.py), not
+    terminated at END, so this re-enters that exact node with the decision. Approve
+    and reject both resume: l3_approval_gate_node itself decides whether to dispatch,
+    so this endpoint only needs to hand off the human's decision.
     """
     graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
@@ -372,29 +377,27 @@ async def submit_approval(
     if snapshot is None or not snapshot.values:
         raise HTTPException(status_code=404, detail="Investigation not found")
 
-    state = snapshot.values
-
-    if state["phase"] != "escalated":
+    if snapshot.next != ("l3_approval_gate",):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Investigation is in phase '{state['phase']}', not awaiting approval",
+            detail=(
+                f"Investigation is not awaiting L3 approval "
+                f"(phase '{snapshot.values.get('phase')}')"
+            ),
         )
 
-    if not body.approved:
-        await graph.aupdate_state(
-            config=thread_config,
-            values={"escalation_reason": f"Rejected by {body.approved_by}: {body.notes}"},
-        )
-        return {"status": "rejected", "investigation_id": investigation_id}
-
-    await graph.aupdate_state(
-        config=thread_config,
-        values={"phase": "responding"},
-    )
+    resume_value = {
+        "approved": body.approved,
+        "approved_by": body.approved_by,
+        "notes": body.notes,
+    }
     asyncio.create_task(
-        _run_investigation(graph, None, thread_config, investigation_id)
+        _run_investigation(graph, Command(resume=resume_value), thread_config, investigation_id)
     )
-    return {"status": "approved", "investigation_id": investigation_id}
+    return {
+        "status": "approved" if body.approved else "rejected",
+        "investigation_id": investigation_id,
+    }
 
 
 @router.get("", response_model=list[InvestigationListItem])
@@ -468,7 +471,11 @@ async def get_evidence(investigation_id: str, request: Request) -> dict:
 
 
 @router.get("/{investigation_id}/analysis")
-async def get_analysis(investigation_id: str, request: Request) -> dict:
+async def get_analysis(
+    investigation_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     """Pre-safety-guard hypotheses, validation result, per-node token/cost usage, budget."""
     graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
@@ -481,6 +488,19 @@ async def get_analysis(investigation_id: str, request: Request) -> dict:
     analysis = state.get("analysis_output")
     validation = state.get("validation_result")
 
+    # pending_approvals is read from the SQL table, not checkpoint state: an L3
+    # approval that's currently pending only exists there while the graph is
+    # paused inside l3_approval_gate_node's interrupt() (see dispatcher.py) - the
+    # checkpoint's own pending_approvals field is never written to anymore.
+    approval_rows = (await db.execute(text("""
+        SELECT approval_id::text, investigation_id::text, action_description,
+               authority_level, checkpoint_id, requested_at,
+               approved, approved_by, approved_at, notes
+        FROM pending_approvals
+        WHERE investigation_id = :id ::uuid
+        ORDER BY requested_at
+    """), {"id": investigation_id})).fetchall()
+
     return {
         "investigation_id": investigation_id,
         "analysis_output": analysis.model_dump() if analysis else None,
@@ -488,7 +508,21 @@ async def get_analysis(investigation_id: str, request: Request) -> dict:
         "token_log": [t.model_dump() for t in state.get("token_log", [])],
         "budget": state["budget"].model_dump(),
         "human_feedback": [h.model_dump() for h in state.get("human_feedback", [])],
-        "pending_approvals": [p.model_dump() for p in state.get("pending_approvals", [])],
+        "pending_approvals": [
+            PendingApproval(
+                approval_id=r.approval_id,
+                investigation_id=r.investigation_id,
+                action_description=r.action_description,
+                authority_level=r.authority_level,
+                checkpoint_id=r.checkpoint_id,
+                requested_at=r.requested_at,
+                approved=r.approved,
+                approved_by=r.approved_by,
+                approved_at=r.approved_at,
+                notes=r.notes,
+            ).model_dump()
+            for r in approval_rows
+        ],
         "dispatched_actions": [a.model_dump() for a in state.get("dispatched_actions", [])],
     }
 
@@ -584,10 +618,11 @@ async def submit_hypothesis_feedback(
 
     accepted/rejected: pure signal capture for usability-test analysis — appended to
     state.human_feedback, no behavior change.
-    challenged: same append, plus resumes the graph from its checkpoint — same
-    checkpoint-resume mechanism POST /approval already uses (aupdate_state + a fresh
-    background graph.ainvoke(None, ...)) — so the planner picks the investigation
-    back up with the human's note visible on its next iteration.
+    challenged: same append, plus actually reopens the investigation via
+    graph.ainvoke(Command(update={"phase": "planning"}, goto="planner"), config) — a
+    genuinely-finished thread (checkpoint's next == ()) has no pending task for
+    ainvoke(None, ...) to resume, so that used to silently do nothing; Command(goto=...)
+    is LangGraph's supported way to re-enter a specific node on such a thread.
     """
     graph = request.app.state.investigation_graph
     thread_config = {"configurable": {"thread_id": investigation_id}}
@@ -609,6 +644,12 @@ async def submit_hypothesis_feedback(
         return {"status": "recorded", "investigation_id": investigation_id, "verdict": body.verdict}
 
     phase = snapshot.values["phase"]
+    if snapshot.next == ("l3_approval_gate",):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Investigation is awaiting L3 approval — resolve that via POST "
+                   "/approval before challenging a hypothesis",
+        )
     if phase not in ("complete", "escalated"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -616,8 +657,12 @@ async def submit_hypothesis_feedback(
                    "wait until it completes or escalates",
         )
 
-    await graph.aupdate_state(config=thread_config, values={"phase": "planning"})
     asyncio.create_task(
-        _run_investigation(graph, None, thread_config, investigation_id)
+        _run_investigation(
+            graph,
+            Command(update={"phase": "planning"}, goto="planner"),
+            thread_config,
+            investigation_id,
+        )
     )
     return {"status": "reopened", "investigation_id": investigation_id}

@@ -261,7 +261,7 @@ export interface DispatchedAction {
   external_id: string;
   url: string | null;
   dispatched_at: string;
-  authority_level: "L1" | "L2";
+  authority_level: "L1" | "L2" | "L3";
 }
 
 export interface PendingApproval {

@@ -40,6 +40,10 @@ class InvestigationState(TypedDict):
 
     # Response outputs
     dispatched_actions: Annotated[list[DispatchedAction], operator.add]
+    # No longer written by the graph — the `pending_approvals` SQL table (written by
+    # dispatcher_node/l3_approval_gate_node) is the source of truth for L3 approval
+    # status, since a checkpoint-only record isn't queryable while the graph is
+    # paused mid-interrupt. Kept in state for schema compatibility.
     pending_approvals: Annotated[list[PendingApproval], operator.add]
     human_feedback: Annotated[list[HypothesisFeedback], operator.add]
 
