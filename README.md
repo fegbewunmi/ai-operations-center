@@ -2,7 +2,7 @@
 
 A multi-agent incident investigation system that autonomously gathers evidence, reasons across telemetry and knowledge sources, and recommends remediation - triggered by a single API call from any alerting pipeline.
 
-Built on Google Cloud Platform to demonstrate production-grade multi-agent system design for a Google Cloud FDE III portfolio.
+Built on Google Cloud Platform.
 
 ---
 
