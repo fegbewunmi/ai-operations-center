@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir .
 
 COPY app/ app/
 COPY eval/ eval/
+COPY eval_results/ eval_results/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
