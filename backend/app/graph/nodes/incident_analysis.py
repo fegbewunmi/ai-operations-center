@@ -125,7 +125,7 @@ def _build_evidence_block(state: InvestigationState) -> str:
     if state.get("planner_working_hypothesis"):
         parts += [
             f"PLANNER WORKING HYPOTHESIS: {state['planner_working_hypothesis']}",
-            f"PLANNER CONFIDENCE: {state['planner_working_confidence']:.0%}",
+            f"PLANNER CONFIDENCE: {state['planner_working_confidence']:.0f}%",
             "",
         ]
 

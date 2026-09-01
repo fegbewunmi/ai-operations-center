@@ -194,7 +194,7 @@ def _build_user_message(state: InvestigationState, topology: ServiceTopology | N
     if state["planner_working_hypothesis"]:
         lines += [
             f"CURRENT HYPOTHESIS: {state['planner_working_hypothesis']}",
-            f"CURRENT CONFIDENCE: {state['planner_working_confidence']:.0%}",
+            f"CURRENT CONFIDENCE: {state['planner_working_confidence']:.0f}%",
             "",
         ]
 
