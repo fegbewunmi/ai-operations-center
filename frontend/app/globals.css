@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0d10;
+  --surface: #12151a;
+  --surface-raised: #171c23;
+  --surface-hover: #1c222a;
+  --border: #262c35;
+  --border-strong: #333b47;
+  --fg: #e7eaef;
+  --fg-muted: #9aa4b2;
+  --fg-faint: #5d6572;
+
+  --accent: #5b9bff;
+  --accent-dim: #2a4a80;
+
+  --ok: #3ec98a;
+  --warn: #e0a94a;
+  --danger: #f0594d;
+
+  --cat-deployment: #5b9bff;
+  --cat-dependency: #e0a94a;
+  --cat-resource: #b57cf0;
+  --cat-configuration: #3ec9c2;
+  --cat-infrastructure: #f0594d;
+  --cat-unknown: #6b7280;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-cat-deployment: var(--cat-deployment);
+  --color-cat-dependency: var(--cat-dependency);
+  --color-cat-resource: var(--cat-resource);
+  --color-cat-configuration: var(--cat-configuration);
+  --color-cat-infrastructure: var(--cat-infrastructure);
+  --color-cat-unknown: var(--cat-unknown);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-dim);
+  color: var(--fg);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-faint);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.react-flow__attribution {
+  display: none;
+}
