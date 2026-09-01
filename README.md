@@ -97,6 +97,20 @@ cp .env.example .env
 # LLM auth uses Application Default Credentials — no API key required
 ```
 
+The Vertex AI SDK reads `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_CLOUD_PROJECT`, and
+`GOOGLE_CLOUD_LOCATION` directly from the OS environment, not from `.env` -
+nothing in this codebase calls `load_dotenv()`, so values sitting in `.env`
+never reach `os.environ` on their own. Export these once per shell (or add
+them to your shell profile) - every command below that makes an LLM call
+(`uvicorn`, `eval.run_eval`) needs them:
+
+```bash
+export GOOGLE_GENAI_USE_VERTEXAI=true
+export GOOGLE_CLOUD_PROJECT=ai-ops-center-eb26
+export GOOGLE_CLOUD_LOCATION=us-central1
+export GCP_PROJECT_ID=ai-ops-center-eb26
+```
+
 ### Start Cloud SQL Auth Proxy (separate terminal)
 
 ```bash
@@ -272,20 +286,15 @@ DATABASE_URL="postgresql+asyncpg://ai_ops_user:PASSWORD@localhost:5433/ai_ops" \
 
 The harness replaces all external APIs (Cloud Monitoring, deployment DB, knowledge DB) with pre-authored fixture data while keeping all LLM calls real. Tests agent reasoning without a database or network.
 
+Requires the `GOOGLE_*`/`GCP_PROJECT_ID` vars exported per **Configure** above, plus `DATABASE_URL` (requires ADC — no API key):
+
 ```bash
-# Run all 3 fixture incidents (requires ADC — no API key)
-GOOGLE_GENAI_USE_VERTEXAI=true \
-GOOGLE_CLOUD_PROJECT=ai-ops-center-eb26 \
-GOOGLE_CLOUD_LOCATION=us-central1 \
-GCP_PROJECT_ID=ai-ops-center-eb26 \
-DATABASE_URL="postgresql+asyncpg://user:pass@localhost/db" \
-python -m eval.run_eval
+# Run all 3 fixture incidents
+DATABASE_URL="postgresql+asyncpg://user:pass@localhost/db" python -m eval.run_eval
 
 # Run one fixture and write JSON results
-GOOGLE_GENAI_USE_VERTEXAI=true GOOGLE_CLOUD_PROJECT=ai-ops-center-eb26 \
-GOOGLE_CLOUD_LOCATION=us-central1 GCP_PROJECT_ID=ai-ops-center-eb26 \
 DATABASE_URL="postgresql+asyncpg://user:pass@localhost/db" \
-python -m eval.run_eval --fixture INC-FD-001 --output results.json
+  python -m eval.run_eval --fixture INC-FD-001 --output results.json
 ```
 
 **Incident fixtures:**
