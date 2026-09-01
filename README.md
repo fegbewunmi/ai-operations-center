@@ -14,6 +14,8 @@ When a Prometheus or Cloud Monitoring alert fires, a single `POST /v1/investigat
 
 **Customer environment:** Orion Commerce - a synthetic 6-service e-commerce platform: API Gateway, Orders, Payments, Inventory, Notifications, User/Auth.
 
+A Next.js investigation console (`frontend/`) sits on top of the API for operators who'd rather watch an investigation unfold than poll `curl` - see [Frontend](#frontend) below.
+
 ---
 
 ## Architecture
@@ -63,6 +65,10 @@ The investigation graph is a **LangGraph StateGraph** compiled with an `AsyncPos
 | Hosting | Cloud Run | Serverless, scales to zero, VPC connector for Cloud SQL |
 | Secrets | Secret Manager | DB credentials - never in env files or images; LLM auth via ADC/service account |
 | MCP integration | `mcp` SDK (FastMCP, `mcp<2`) | Exposes investigation tools to Claude Desktop/Code over stdio; see [MCP server](#mcp-server) |
+| Frontend | Next.js 16 (App Router) + TypeScript | Client of `/v1/*` only - no business logic duplicated; see [Frontend](#frontend) |
+| Investigation graph UI | React Flow + `dagre` | Auto-layout canvas rendering the investigation itself (evidence -> hypotheses), not the LangGraph pipeline - see ADR-014 |
+| Charts | Recharts | Metrics time series in the Evidence Explorer |
+| Styling | Tailwind CSS v4 | CSS-first `@theme inline` config, dark/neutral ops-console palette |
 
 ---
 
@@ -155,6 +161,34 @@ curl -X POST http://localhost:8080/v1/tickets \
     "investigation_id": "<investigation_id from above>"
   }'
 ```
+
+---
+
+## Frontend
+
+`frontend/` is a Next.js 16 investigation console: Incident Library, Investigation Workspace (evidence graph, competing hypotheses, agent activity, human approval controls), Evidence Explorer, and an Evaluation/Observability screen. It's a pure client of the API above - no database access, no duplicated business logic, every screen backed by real `/v1/*` responses. See [ADR-014](docs/decisions/ADR-014-investigation-console-frontend.md) for why the central graph shows the investigation instead of the fixed agent pipeline, why updates are polled instead of streamed, and how fixture replay works end-to-end.
+
+### Run it
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local   # NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+npm run dev
+# http://localhost:3000
+```
+
+The backend's `FRONTEND_ORIGIN` setting must match wherever this dev server runs (default `http://localhost:3000`) or CORS preflight will fail. See `frontend/README.md` for structure and layout notes.
+
+### End-to-end: replay a fixture through the UI
+
+With the backend running (Cloud SQL Auth Proxy up, `uvicorn app.main:app --reload --port 8080`) and the frontend running (`npm run dev`, port 3000):
+
+1. Open `http://localhost:3000` - the Incident Library lists the 3 fixture scenarios (`INC-FD-001`, `INC-LR-001`, `INC-RL-001`) plus any past investigation history.
+2. Click **Start investigation** on a fixture card. This calls `POST /v1/investigations/replay/{fixture_id}`, which runs the fixture through the real graph and checkpointer (mocked external calls, real LLM reasoning) - and redirects to the Investigation Workspace.
+3. Watch the Workspace poll live: evidence nodes appear on the central graph as each specialist reports in, hypotheses appear once `incident_analysis` completes, and the Agent Activity panel on the right shows per-node timing and token cost as the investigation progresses.
+4. Click a hypothesis to inspect it, or use Accept / Reject / Challenge - Challenge reopens the investigation with your note, visibly re-invoking the planner.
+5. `http://localhost:3000/evaluation` is separate from step 2-4: it reads whatever's already been committed to `backend/eval_results/` by `python -m eval.run_eval` (see below), using exactly what `eval/scorer.py` computed. A fixture replayed through the UI doesn't run the scorer or write a new eval result - it's a live investigation for the Workspace to render, not a scored eval run.
 
 ---
 
@@ -299,6 +333,7 @@ gcloud run deploy ai-ops-api \
 | [Evaluation](docs/07-evaluation.md) | Eval harness design, metrics, test dataset |
 | [Deployment](docs/08-deployment.md) | GCP deployment walkthrough, Cloud Run, CI/CD |
 | [Known Issues](docs/KNOWN-ISSUES.md) | Tracked gaps found during development but out of scope for the change that found them |
+| [Frontend README](frontend/README.md) | Investigation console structure, setup, and layout notes |
 
 ### Architecture Decision Records
 
@@ -317,6 +352,7 @@ gcloud run deploy ai-ops-api \
 | [ADR-011](docs/decisions/ADR-011-knowledge-evidence-pipeline.md) | Knowledge evidence pipeline: retrieval gap vs. taxonomy gap debugging methodology |
 | [ADR-012](docs/decisions/ADR-012-llm-cost-tracking.md) | Per-node LLM token and cost tracking |
 | [ADR-013](docs/decisions/ADR-013-mcp-server-integration.md) | MCP server as a thin HTTP wrapper; confirm-gated writes instead of the (broken) L3 approval pattern |
+| [ADR-014](docs/decisions/ADR-014-investigation-console-frontend.md) | Investigation console: graph models the investigation not the pipeline, polling over SSE, fixture replay through the real graph, challenge-resume |
 
 ---
 

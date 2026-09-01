@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trace — Investigation Console
 
-## Getting Started
+Next.js 16 (App Router) + TypeScript frontend for the AI Operations Center backend. Not a chatbot: an evidence-first operations console — Incident Library, Investigation Workspace, Evidence Explorer, Evaluation/Observability — backed entirely by the real FastAPI + LangGraph backend in `../backend`.
 
-First, run the development server:
+See the [repo root README](../README.md) for the full-system picture and [ADR-014](../docs/decisions/ADR-014-investigation-console-frontend.md) for why this frontend is shaped the way it is.
+
+---
+
+## Prerequisites
+
+- Node.js 20+
+- The backend running and reachable (see `../backend/README` / repo root README) — this app has no data or logic of its own, it's a client of `/v1/*`.
+
+## Setup
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local
+# NEXT_PUBLIC_API_BASE_URL defaults to http://localhost:8080 — change it if your
+# backend runs elsewhere.
+```
+
+## Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The backend must have `FRONTEND_ORIGIN` set to match wherever this dev server actually runs (default `http://localhost:3000`) or `POST`/`GET` calls will fail CORS preflight.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build / lint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build   # next build — type-checks and produces a production build
+npm run lint    # eslint
+```
 
-## Learn More
+There is no frontend test suite — correctness here is enforced by TypeScript (types in `lib/types.ts` are hand-mapped 1:1 to the backend's Pydantic schemas, no OpenAPI codegen) plus manual verification against the running backend.
 
-To learn more about Next.js, take a look at the following resources:
+## Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/
+  page.tsx                          Incident Library — launch a fixture, browse history
+  investigations/[id]/page.tsx      Investigation Workspace (flagship screen)
+  evaluation/page.tsx               Evaluation / Observability
+components/
+  incident-library/  workspace/  evidence/  evaluation/
+lib/
+  types.ts                          Hand-mapped backend response/schema types
+  api.ts                            Typed fetch client
+  useInvestigationPolling.ts        Polling hook (no SSE/WebSockets — see ADR-014)
+  deriveEvidenceLinks.ts            Investigation-graph node/edge derivation — the
+                                     documented heuristic behind the central graph
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## The one thing worth understanding before touching `InvestigationGraph.tsx`
 
-## Deploy on Vercel
+The center canvas on the Workspace screen is **not** a picture of the fixed 8-node LangGraph pipeline. It renders the investigation itself — incident → evidence → hypotheses — derived from real state in `lib/deriveEvidenceLinks.ts`. Node/agent execution (which of the 8 backend nodes ran, when, at what cost) lives in the separate `AgentActivityPanel`. Evidence→hypothesis edges are *inferred* by substring-matching real identifiers against hypothesis citation text, not a backend-modeled relationship — read the comment block at the top of `deriveEvidenceLinks.ts` before changing the matching rule, and see ADR-014 for why this is a heuristic rather than a backend field.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Layout
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The Investigation Workspace is viewport-locked, IDE-style: the global header and per-investigation status bar are fixed, and each panel (Evidence rail, graph, Detail, Hypotheses, Agent Activity) scrolls independently. The page itself never grows — see `app/layout.tsx` (`body: h-full overflow-hidden`) and `components/ui.tsx`'s `Panel`. If you add a new panel, give its scrollable content its own `flex flex-col` + `overflow-auto` — a plain `<div className="flex-1 min-h-0">` without `flex` on it will silently break containment (this bit the original build once; see ADR-014).
