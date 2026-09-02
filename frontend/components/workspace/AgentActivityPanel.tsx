@@ -100,18 +100,23 @@ export function AgentActivityPanel({
           </table>
         )}
 
-        <div className="flex-1 min-h-[140px] overflow-auto">
+        <div className="flex-1 min-h-[220px] overflow-auto">
+          {events.length > 0 && (
+            <div className="sticky top-0 z-10 px-3 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-faint bg-surface-raised border-b border-border">
+              Activity log
+            </div>
+          )}
           {events.length === 0 ? (
             <EmptyState>No activity yet.</EmptyState>
           ) : (
             <ul className="divide-y divide-border/60">
               {[...events].reverse().map((e, i) => (
-                <li key={i} className="px-3 py-2.5">
+                <li key={i} className="px-3 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[12px] font-medium text-fg">{label(e.source)}</span>
                     <span className="text-[11px] text-fg-faint tabular-nums">{formatRelativeTime(e.timestamp)}</span>
                   </div>
-                  <p className="mt-1 text-[12px] text-fg-muted leading-snug">{e.description}</p>
+                  <p className="mt-1.5 text-[12px] text-fg-muted leading-relaxed">{e.description}</p>
                 </li>
               ))}
             </ul>

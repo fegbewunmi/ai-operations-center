@@ -95,7 +95,7 @@ export default function InvestigationWorkspacePage({
               onSelect={selectHypothesis}
             />
           </div>
-          <div className="h-96 lg:h-auto lg:flex-[1.6] lg:min-h-0 flex flex-col">
+          <div className="h-[34rem] lg:h-auto lg:flex-[2.2] lg:min-h-0 flex flex-col">
             <AgentActivityPanel status={status} analysis={analysis} timeline={timeline} />
           </div>
         </div>
