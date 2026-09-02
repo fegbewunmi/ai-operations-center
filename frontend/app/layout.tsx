@@ -12,16 +12,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full">
       <body className="h-full flex flex-col overflow-hidden">
-        <header className="flex items-center gap-6 border-b border-border bg-surface px-4 h-11 shrink-0">
-          <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight text-fg">
+        <header className="flex items-center gap-3 sm:gap-6 border-b border-border bg-surface px-3 sm:px-4 h-11 shrink-0 overflow-x-auto">
+          <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight text-fg shrink-0">
             <span className="inline-block h-2 w-2 rounded-full bg-accent" />
             Trace
           </Link>
-          <nav className="flex items-center gap-4 text-[13px]">
-            <Link href="/" className="text-fg-muted hover:text-fg transition-colors">
+          <nav className="flex items-center gap-3 sm:gap-4 text-[13px] shrink-0">
+            <Link href="/" className="text-fg-muted hover:text-fg transition-colors whitespace-nowrap">
               Incident Library
             </Link>
-            <Link href="/evaluation" className="text-fg-muted hover:text-fg transition-colors">
+            <Link href="/evaluation" className="text-fg-muted hover:text-fg transition-colors whitespace-nowrap">
               Evaluation
             </Link>
           </nav>

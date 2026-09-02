@@ -25,37 +25,39 @@ export function EvalRunCompare({ runs }: { runs: EvalRun[] }) {
 
   return (
     <Panel title="Run comparison">
-      <table className="w-full text-[11px]">
-        <thead>
-          <tr className="border-b border-border text-left text-fg-faint">
-            <th className="px-3 py-2 font-medium">Fixture</th>
-            {runs.map((r) => (
-              <th key={r.run_id} className="px-3 py-2 font-medium">
-                {r.run_id}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {fixtureIds.map((fid) => (
-            <tr key={fid} className="border-b border-border last:border-0">
-              <td className="px-3 py-1.5 font-mono text-fg">{fid}</td>
-              {runs.map((r) => {
-                const res = r.results.find((x) => x.incident_id === fid);
-                if (!res) return <td key={r.run_id} className="px-3 py-1.5 text-fg-faint">-</td>;
-                return (
-                  <td key={r.run_id} className="px-3 py-1.5">
-                    <span className={res.accuracy ? "text-ok" : "text-danger"}>
-                      {res.final_confidence.toFixed(0)}%
-                    </span>
-                    <span className="ml-1.5 text-fg-faint">{res.mttfh_seconds.toFixed(0)}s</span>
-                  </td>
-                );
-              })}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[480px] text-[11px]">
+          <thead>
+            <tr className="border-b border-border text-left text-fg-faint">
+              <th className="px-3 py-2 font-medium">Fixture</th>
+              {runs.map((r) => (
+                <th key={r.run_id} className="px-3 py-2 font-medium">
+                  {r.run_id}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {fixtureIds.map((fid) => (
+              <tr key={fid} className="border-b border-border last:border-0">
+                <td className="px-3 py-1.5 font-mono text-fg">{fid}</td>
+                {runs.map((r) => {
+                  const res = r.results.find((x) => x.incident_id === fid);
+                  if (!res) return <td key={r.run_id} className="px-3 py-1.5 text-fg-faint">-</td>;
+                  return (
+                    <td key={r.run_id} className="px-3 py-1.5">
+                      <span className={res.accuracy ? "text-ok" : "text-danger"}>
+                        {res.final_confidence.toFixed(0)}%
+                      </span>
+                      <span className="ml-1.5 text-fg-faint">{res.mttfh_seconds.toFixed(0)}s</span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Panel>
   );
 }

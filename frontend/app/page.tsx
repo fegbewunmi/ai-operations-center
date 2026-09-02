@@ -36,7 +36,7 @@ export default function IncidentLibraryPage() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-8 flex flex-col gap-8">
+    <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8 flex flex-col gap-8">
       <div>
         <h1 className="text-lg font-semibold text-fg">Incident Library</h1>
         <p className="mt-1 text-[13px] text-fg-muted">
