@@ -4,7 +4,7 @@ import type { EvalRun } from "@/lib/types";
 import { EmptyState, Panel, formatDuration } from "@/components/ui";
 
 function pct(n: number, d: number): string {
-  return d === 0 ? "—" : `${((n / d) * 100).toFixed(0)}%`;
+  return d === 0 ? "-" : `${((n / d) * 100).toFixed(0)}%`;
 }
 
 export function EvalRunsTable({ run }: { run: EvalRun }) {
@@ -61,7 +61,7 @@ export function EvalRunsTable({ run }: { run: EvalRun }) {
                 </td>
                 <td className="px-3 py-1.5">
                   <span className={r.safety_guard_triggered ? "text-warn" : "text-fg-faint"}>
-                    {r.safety_guard_triggered ? "triggered" : "—"}
+                    {r.safety_guard_triggered ? "triggered" : "-"}
                   </span>
                 </td>
               </tr>

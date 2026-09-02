@@ -42,7 +42,7 @@ export function EvalRunCompare({ runs }: { runs: EvalRun[] }) {
               <td className="px-3 py-1.5 font-mono text-fg">{fid}</td>
               {runs.map((r) => {
                 const res = r.results.find((x) => x.incident_id === fid);
-                if (!res) return <td key={r.run_id} className="px-3 py-1.5 text-fg-faint">—</td>;
+                if (!res) return <td key={r.run_id} className="px-3 py-1.5 text-fg-faint">-</td>;
                 return (
                   <td key={r.run_id} className="px-3 py-1.5">
                     <span className={res.accuracy ? "text-ok" : "text-danger"}>

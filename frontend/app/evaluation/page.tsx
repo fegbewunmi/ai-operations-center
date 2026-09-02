@@ -22,7 +22,7 @@ export default function EvaluationPage() {
         <h1 className="text-lg font-semibold text-fg">Evaluation &amp; Observability</h1>
         <p className="mt-1 text-[13px] text-fg-muted">
           Exactly what <span className="mono">eval/scorer.py</span> computed for each committed run in{" "}
-          <span className="mono">backend/eval_results/</span> — no metrics beyond that are shown here.
+          <span className="mono">backend/eval_results/</span> - no metrics beyond that are shown here.
         </p>
       </div>
 

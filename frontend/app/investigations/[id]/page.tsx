@@ -84,7 +84,7 @@ export default function InvestigationWorkspacePage({
           </div>
         </div>
 
-        <div className="w-80 shrink-0 flex flex-col gap-3 min-h-0">
+        <div className="w-96 shrink-0 flex flex-col gap-3 min-h-0">
           <div className="flex-1 min-h-0 flex flex-col">
             <HypothesisPanel
               investigationId={id}
@@ -95,7 +95,7 @@ export default function InvestigationWorkspacePage({
               onSelect={selectHypothesis}
             />
           </div>
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-[1.3] min-h-0 flex flex-col">
             <AgentActivityPanel status={status} analysis={analysis} timeline={timeline} />
           </div>
         </div>

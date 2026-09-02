@@ -24,7 +24,7 @@ export function HypothesisPanel({
     <Panel title="Hypotheses" className="flex-1 min-h-0">
       <div className="h-full overflow-auto p-2 flex flex-col gap-2">
         {hypotheses.length === 0 ? (
-          <EmptyState>No hypotheses yet — waiting on evidence.</EmptyState>
+          <EmptyState>No hypotheses yet - waiting on evidence.</EmptyState>
         ) : (
           hypotheses
             .slice()

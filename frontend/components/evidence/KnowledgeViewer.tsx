@@ -53,7 +53,7 @@ export function KnowledgeViewer({ context }: { context: KnowledgeContext }) {
           <div className="flex flex-col gap-1.5">
             {context.similar_incidents.map((s) => (
               <div key={s.incident_id} className="rounded border border-border px-2 py-1.5 text-[11px] text-fg-muted">
-                {s.root_cause_description} — {s.days_ago}d ago (similarity {s.similarity_score.toFixed(2)})
+                {s.root_cause_description} - {s.days_ago}d ago (similarity {s.similarity_score.toFixed(2)})
               </div>
             ))}
           </div>

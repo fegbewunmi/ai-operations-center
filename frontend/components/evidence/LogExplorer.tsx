@@ -36,7 +36,7 @@ export function LogExplorer({ logs }: { logs: LogEvent[] }) {
     return (
       <EmptyState>
         No log events on this finding. The Telemetry Agent doesn&apos;t populate structured
-        logs yet — this view is wired to the real schema and will populate once it does.
+        logs yet - this view is wired to the real schema and will populate once it does.
       </EmptyState>
     );
   }

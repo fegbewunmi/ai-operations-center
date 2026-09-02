@@ -4,7 +4,7 @@ import "reactflow/dist/style.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Trace — AI Operations Center",
+  title: "Trace - AI Operations Center",
   description: "Multi-agent incident investigation console",
 };
 

@@ -116,7 +116,7 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
 }
 
 export function formatRelativeTime(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const date = new Date(iso);
   const diffMs = Date.now() - date.getTime();
   const diffSec = Math.round(diffMs / 1000);
