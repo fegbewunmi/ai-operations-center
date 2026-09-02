@@ -64,8 +64,8 @@ export function AgentActivityPanel({
 
   return (
     <Panel title="Agent activity" className="flex-1 min-h-0 flex flex-col">
-      <div className="flex-1 min-h-0 flex flex-col">
-        <div className="border-b border-border px-3 py-2.5 text-[13px] text-fg">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="border-b border-border px-3 py-2.5 text-[13px] text-fg shrink-0">
           {PHASE_ACTIVITY[status.phase]}
           {lastEvent && (
             <div className="mt-1 text-[12px] text-fg-muted">

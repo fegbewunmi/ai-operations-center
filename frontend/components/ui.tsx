@@ -12,14 +12,14 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col rounded-md border border-border bg-surface ${className}`}>
+    <div className={`flex flex-col overflow-hidden rounded-md border border-border bg-surface ${className}`}>
       {title && (
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2 shrink-0">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{title}</h2>
           {action}
         </div>
       )}
-      <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{children}</div>
     </div>
   );
 }
