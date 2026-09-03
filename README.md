@@ -198,7 +198,7 @@ The backend's `FRONTEND_ORIGIN` setting must match wherever this dev server runs
 
 With the backend running (Cloud SQL Auth Proxy up, `uvicorn app.main:app --reload --port 8080`) and the frontend running (`npm run dev`, port 3000):
 
-1. Open `http://localhost:3000` - the Incident Library lists the 3 fixture scenarios (`INC-FD-001`, `INC-LR-001`, `INC-RL-001`) plus any past investigation history.
+1. Open `http://localhost:3000` - the Incident Library lists the 3 fixture scenarios (`INC-FD-001`, `INC-LR-001`, `INC-RL-001`) plus any past investigation history. 
 2. Click **Start investigation** on a fixture card. This calls `POST /v1/investigations/replay/{fixture_id}`, which runs the fixture through the real graph and checkpointer (mocked external calls, real LLM reasoning) - and redirects to the Investigation Workspace.
 3. Watch the Workspace poll live: evidence nodes appear on the central graph as each specialist reports in, hypotheses appear once `incident_analysis` completes, and the Agent Activity panel on the right shows per-node timing and token cost as the investigation progresses.
 4. Click a hypothesis to inspect it, or use Accept / Reject / Challenge - Challenge reopens the investigation with your note, visibly re-invoking the planner.
