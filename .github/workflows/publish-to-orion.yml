@@ -40,6 +40,14 @@ jobs:
 
       - name: Run unit tests
         working-directory: backend
+        # These unit tests never touch a real database (the README's own
+        # documented split - the ignored files above are the ones that do,
+        # and need the real Cloud SQL Auth Proxy this CI job doesn't have).
+        # Settings still requires non-empty values to construct at import
+        # time - placeholders, not real credentials.
+        env:
+          GCP_PROJECT_ID: ai-ops-center-eb26
+          DATABASE_URL: postgresql+asyncpg://unused:unused@localhost/unused
         run: |
           pytest tests/ -v --ignore=tests/test_deployment_node.py --ignore=tests/test_tickets_api.py \
             --ignore=tests/test_dispatcher_node.py --ignore=tests/test_approval_and_challenge_api.py
