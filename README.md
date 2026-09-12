@@ -2,7 +2,7 @@
 
 A multi-agent incident investigation system that autonomously gathers evidence, reasons across telemetry and knowledge sources, and recommends remediation - triggered by a single API call from any alerting pipeline.
 
-Built on Google Cloud Platform.
+Built on Google Cloud Platform. Registered as `incident-investigator` in [Orion](https://github.com/fegbewunmi/agent-developer-platform), the internal developer platform this org uses to publish, discover, evaluate, and review AI agents - see `.github/workflows/publish-to-orion.yml` for how a real commit here becomes a real, source-verified published version there.
 
 ---
 
