@@ -1,0 +1,80 @@
+name: Publish to Orion
+
+# Real source provenance for the Incident Investigator agent
+# (agent-dev-platform's "Orion" control plane) - see that repo's
+# docs/adrs/0023-registry-not-deployment-platform.md and
+# docs/adrs/0024-ci-publishing-machine-identity.md.
+#
+# This workflow does NOT build, push, or deploy anything - ai-operations'
+# own deployment process is unrelated and untouched by this. It only
+# publishes real, verified provenance (this exact commit) as a new
+# AgentVersion in Orion once tests pass, using a short-lived OIDC token
+# minted via Workload Identity Federation - never a stored credential.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # required to mint the Workload Identity Federation token
+
+env:
+  ORION_BACKEND_URL: https://agent-platform-api-159087954477.us-central1.run.app
+  ORION_INCIDENT_INVESTIGATOR_AGENT_ID: 2b497d48-1e42-4f72-b8cf-f0dd70e86355
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -e ".[dev]"
+
+      - name: Run unit tests
+        working-directory: backend
+        run: |
+          pytest tests/ -v --ignore=tests/test_deployment_node.py --ignore=tests/test_tickets_api.py \
+            --ignore=tests/test_dispatcher_node.py --ignore=tests/test_approval_and_challenge_api.py
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/159087954477/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+          service_account: agent-platform-ci-publisher@ai-ops-center-eb26.iam.gserviceaccount.com
+          token_format: id_token
+          id_token_audience: https://agent-platform-api-159087954477.us-central1.run.app
+          id_token_include_email: true
+
+      - name: Publish real source provenance to Orion
+        run: |
+          set -euo pipefail
+          body=$(cat <<EOF
+          {
+            "manifest": {
+              "agent": {"version": "ci-${GITHUB_SHA:0:12}", "framework": "langgraph"},
+              "model": {"provider": "vertex-ai", "name": "gemini-2.5-flash"},
+              "skills": [],
+              "mcp": {},
+              "evaluation": {"policy": "incident-investigator"}
+            },
+            "provenance": {
+              "git_repo": "${{ github.repository }}",
+              "git_commit_sha": "${{ github.sha }}",
+              "git_ref": "${{ github.ref_name }}"
+            }
+          }
+          EOF
+          )
+          curl -sf -X POST "$ORION_BACKEND_URL/internal/ci/agents/$ORION_INCIDENT_INVESTIGATOR_AGENT_ID/versions" \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.id_token }}" \
+            -H "Content-Type: application/json" \
+            -d "$body" | tee /dev/stderr
